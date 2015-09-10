@@ -142,7 +142,7 @@ processDataStream'
 
   
   
-  let (rlp, _) = rlpSplit rest
+  let (rlp, _) = rlpSplit $ B.pack rest
 
   let SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
       publicKey = getPubKeyFromSignature signature messageHash  
