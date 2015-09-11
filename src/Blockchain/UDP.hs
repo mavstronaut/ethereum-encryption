@@ -1,16 +1,13 @@
 
 module Blockchain.UDP (
   getServerPubKey,
-  processDataStream,
   ndPacketToRLP,
-  rlpToNDPacket,
   NodeDiscoveryPacket(..),
-  Endpoint(..),
-  Neighbor(..),
-  NodeID(..)
+  Endpoint(..)
   ) where
 
 import Network.Socket
+import qualified Network.Socket.ByteString as B
 
 import Control.Exception
 import Control.Monad.IO.Class
@@ -25,7 +22,6 @@ import Data.Maybe
 import GHC.IO.IOMode
 import qualified Network.Haskoin.Internals as H
 import System.IO
---import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 import Blockchain.Data.RLP
 import Blockchain.ExtendedECDSA
@@ -100,8 +96,16 @@ ndPacketToRLP (Pong (Endpoint ipFrom udpPortFrom tcpPortFrom) tok expiration) = 
 --ndPacketToRLP (FindNode target expiration) = (3, RLPArray [rlpEncode target, rlpEncode expiration])
 --ndPacketToRLP (Neighbors ip port id' expiration) = (4, RLPArray [rlpEncode ip, rlpEncode $ toInteger port, rlpEncode id', rlpEncode expiration])
 
+ndPacketToRLP _ = error "Unsupported case in call to ndPacketToRLP"
+
+
+
+
+
+
 --showPoint::H.Point->String
 --showPoint (H.Point x y) = "Point 0x" ++ showHex x "" ++ " 0x" ++ showHex y ""
+
 
 {-
 showPubKey::H.PubKey->String
@@ -114,7 +118,6 @@ showPubKey (H.PubKey point) =
 showPubKey (H.PubKeyU _) = error "Missing case in showPubKey: PubKeyU"
 -}  
 
-ndPacketToRLP _ = error "Unsupported case in call to ndPacketToRLP"
 
 
 processDataStream'::[Word8]->IO H.PubKey
@@ -138,10 +141,6 @@ processDataStream'
       yIsOdd = v == 1 -- 0x1c
       signature = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
     
---  putStrLn $ show (pretty theHash) ++ ", " ++ show theType
-
-  
-  
   let (rlp, _) = rlpSplit $ B.pack rest
 
   let SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
@@ -151,83 +150,41 @@ processDataStream'
 
 processDataStream' _ = error "processDataStream' called with too few bytes"
 
-
-processDataStream::BL.ByteString->IO H.PubKey
-{-processDataStream x = do
-  putStrLn "got some data"
-  let result = runGet get x
-  print (result::RawNodeDiscoveryPacket) -}
-processDataStream x = processDataStream' . BL.unpack $ x
-
-
 newtype NodeID = NodeID B.ByteString deriving (Show, Read, Eq)
 
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x
 
-{-
-pubKeyToNodeID::H.PubKey->NodeID
-pubKeyToNodeID (H.PubKey point) =
-  NodeID $ BL.toStrict $ encode x `BL.append` encode y
-  where
-    x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX point
-    y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY point
-pubKeyToNodeID (H.PubKeyU _) = error "Missing case in pubKeyToNodeId: PubKeyU"
--}
-
 getServerPubKey::H.PrvKey->String->PortNumber->IO Point
 getServerPubKey myPriv domain port = do
+  withSocketsDo $ bracket getSocket close (talk myPriv)
+    where
+      getSocket = do
+        (serveraddr:_) <- getAddrInfo Nothing (Just domain) (Just $ show port)
+        s <- socket (addrFamily serveraddr) Datagram defaultProtocol
+        _ <- connect s (addrAddress serveraddr)
+        return s
 
-  --let theCurve = getCurveByName Crypto.Types.PubKey.ECC.SEC_p256k1
+      talk::H.PrvKey->Socket->IO Point
+      talk prvKey' socket = do
+        let (theType, theRLP) =
+              ndPacketToRLP $
+              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) 1451606400
+            theData = B.unpack $ rlpSerialize theRLP
+            SHA theMsgHash = hash $ B.pack $ (theType:theData)
 
-  --ep <- createEntropyPool
+        ExtendedSignature signature yIsOdd <-
+          H.withSource H.devURandom $ encrypt prvKey' theMsgHash
 
-  --let g = cprgCreate ep::SystemRNG
-
-  --let (prvKey', g') = generatePrivate g theCurve
-
-  --let pubKey = calculatePublic theCurve prvKey
-
-  --    Point x y = pubKey
-
-  --print $ pointToBytes pubKey
-
-  withSocketsDo $ bracket getSocket hClose (talk myPriv)
-        where getSocket = do
-                (serveraddr:_) <- getAddrInfo Nothing (Just domain) (Just $ show port)
-                s <- socket (addrFamily serveraddr) Datagram defaultProtocol
-                _ <- connect s (addrAddress serveraddr) >> return s
-                socketToHandle s ReadWriteMode
-
-              talk::H.PrvKey->Handle->IO Point
-              talk prvKey' h = do
-                let (theType, theRLP) = ndPacketToRLP $
-                              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) 1451606400
---                              FindNode "qq" 1451606400
-                    theData = B.unpack $ rlpSerialize theRLP
-                    SHA theMsgHash = hash $ B.pack $ (theType:theData)
-
-                ExtendedSignature signature yIsOdd <-
-                  liftIO $ H.withSource H.devURandom $ encrypt prvKey' theMsgHash
-
-                let v = if yIsOdd then 1 else 0 -- 0x1c else 0x1b
-                    r = H.sigR signature
-                    s = H.sigS signature
-                    theSignature = word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
-                    theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
-                --putStrLn $ "my address is " ++ show (pretty $ prvKey2Address prvKey')
-                --let nodeId = pubKeyToNodeID $ H.derivePubKey prvKey
-
---                putStrLn $ "r:       " ++ (show r)
-  --              putStrLn $ "s:       " ++ (show s)
-    --            putStrLn $ "v:       " ++ (show v)
-      --          putStrLn $ "theHash: " ++ (show theHash)
-
+        let v = if yIsOdd then 1 else 0 -- 0x1c else 0x1b
+            r = H.sigR signature
+            s = H.sigS signature
+            theSignature =
+              word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
+            theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
                     
-                B.hPut h $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
-                --send s $ map w2c $ theHash ++ theSignature ++ theType ++ theData
-                --recv s 1024 >>= \msg -> putStrLn $ "Received " ++ msg
-                --B.hGet h 4 >>= \msg -> putStrLn $ "Received " ++ show msg
-                pubKey <- BL.hGetContents h >>= processDataStream
+        B.send socket $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
-                return $ hPubKeyToPubKey pubKey
+        pubKey <- B.recv socket 2000 >>= processDataStream' . B.unpack
+        
+        return $ hPubKeyToPubKey pubKey
