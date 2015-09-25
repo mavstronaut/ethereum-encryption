@@ -10,18 +10,14 @@ import Network.Socket
 import qualified Network.Socket.ByteString as B
 
 import Control.Exception
-import Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Lazy as BL
 import Data.Maybe
-import GHC.IO.IOMode
 import qualified Network.Haskoin.Internals as H
-import System.IO
 
 import Blockchain.Data.RLP
 import Blockchain.ExtendedECDSA
@@ -61,7 +57,7 @@ data Endpoint = Endpoint String Word16 Word16 deriving (Show,Read,Eq)
 data Neighbor = Neighbor Endpoint NodeID deriving (Show,Read,Eq)
 
 
-
+{-
 rlpToNDPacket::Word8->RLPObject->NodeDiscoveryPacket
 rlpToNDPacket 0x1 (RLPArray [protocolVersion, RLPArray [ ipFrom, udpPortFrom, tcpPortFrom], RLPArray [ipTo, udpPortTo, tcpPortTo], expiration]) =
     Ping (rlpDecode protocolVersion) (Endpoint (rlpDecode ipFrom) (fromInteger $ rlpDecode udpPortFrom) (fromInteger $ rlpDecode tcpPortFrom))
@@ -75,6 +71,7 @@ rlpToNDPacket 0x2 (RLPArray [ RLPArray [ ipFrom, udpPortFrom, tcpPortFrom ], rep
 --rlpToNDPacket 0x3 (RLPArray [target, expiration]) = FindNode (rlpDecode target) (fromInteger $ rlpDecode expiration)
 --rlpToNDPacket 0x4 (RLPArray [ip, port, id', expiration]) = Neighbors (rlpDecode ip) (fromInteger $ rlpDecode port) (rlpDecode id') (rlpDecode expiration)
 rlpToNDPacket v x = error $ "Missing case in rlpToNDPacket: " ++ show v ++ ", " ++ show x
+-}
 
 ndPacketToRLP::NodeDiscoveryPacket->(Word8, RLPObject)
 ndPacketToRLP (Ping ver (Endpoint ipFrom udpPortFrom tcpPortFrom) (Endpoint ipTo udpPortTo tcpPortTo) expiration) =
@@ -166,7 +163,7 @@ getServerPubKey myPriv domain port = do
         return s
 
       talk::H.PrvKey->Socket->IO Point
-      talk prvKey' socket = do
+      talk prvKey' socket' = do
         let (theType, theRLP) =
               ndPacketToRLP $
               Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) 1451606400
@@ -183,8 +180,8 @@ getServerPubKey myPriv domain port = do
               word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
             theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
                     
-        B.send socket $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
+        _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
-        pubKey <- B.recv socket 2000 >>= processDataStream' . B.unpack
+        pubKey <- B.recv socket' 2000 >>= processDataStream' . B.unpack
         
         return $ hPubKeyToPubKey pubKey
