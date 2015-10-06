@@ -33,12 +33,12 @@ import Blockchain.SHA
 --At some point I have to convert from one PubKey to the other, this function
 --lets me to that.
 hPubKeyToPubKey::H.PubKey->Point
-hPubKeyToPubKey (H.PubKey hPoint) =
+hPubKeyToPubKey pubKey =
   Point (fromIntegral x) (fromIntegral y)
   where
     x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX hPoint
     y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY hPoint
-hPubKeyToPubKey (H.PubKeyU _) = error "PubKeyU not supported in hPubKeyToPUbKey yet"
+    hPoint = H.pubKeyPoint pubKey
 
 encrypt::H.PrvKey->Word256->H.SecretT IO ExtendedSignature
 encrypt prvKey' theHash = do

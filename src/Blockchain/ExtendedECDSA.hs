@@ -68,8 +68,8 @@ unsafeExtSignMsg h d (k,p) = do
     return $ ExtendedSignature (Signature r s) (odd y `xor` (s' > (maxBound `div` 2)))
 
 extSignMsg :: Monad m => Word256 -> PrvKey -> SecretT m ExtendedSignature
-extSignMsg _ (PrvKey  0) = error "signMsg: Invalid private key 0"
-extSignMsg _ (PrvKeyU 0) = error "signMsg: Invalid private key 0"
+--extSignMsg _ (PrvKey  0) = error "signMsg: Invalid private key 0"
+--extSignMsg _ (PrvKeyU 0) = error "signMsg: Invalid private key 0"
 extSignMsg h d = do
     -- 4.1.3.1
     (k,p) <- genKeyPair
@@ -89,7 +89,7 @@ getPubKeyFromSignature (ExtendedSignature sig yIsOdd) msgHash =
         correctY = if odd firstY == yIsOdd then firstY else secondY
         Just bigR = makePoint (fromIntegral r) correctY
 
-      in Just $ PubKey $ ((s / r) `mulPoint` bigR) `addPoint` ((fromIntegral curveN - fromIntegral msgHash/r) `mulPoint` curveG)
+      in Just $ makePubKey $ ((s / r) `mulPoint` bigR) `addPoint` ((fromIntegral curveN - fromIntegral msgHash/r) `mulPoint` curveG)
     _ -> Nothing
   where
     r = sigR sig

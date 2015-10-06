@@ -54,8 +54,7 @@ hPointToBytes point =
     y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY point
 
 pubKeyToBytes::H.PubKey->[Word8]
-pubKeyToBytes (H.PubKey point) = hPointToBytes point
-pubKeyToBytes (H.PubKeyU _) = error "Missing case in showPubKey: PubKeyU"
+pubKeyToBytes pubKey = hPointToBytes $ H.pubKeyPoint pubKey
 
 bytesToPoint::[Word8]->Point
 bytesToPoint x | length x == 64 =
@@ -202,7 +201,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
 
  --  putStrLn $ "sharedKey: " ++ show sharedKey
   -- putStrLn $ "msg:       " ++ show msg
-  sig <- H.withSource H.devURandom $ extSignMsg msg (H.PrvKey $ fromIntegral myPriv)
+  sig <- H.withSource H.devURandom $ extSignMsg msg (fromMaybe (error "invalid private number in call to getHandshakeBytes") $ H.makePrvKey $ fromIntegral myPriv)
   let
     ephemeral =
       fromMaybe (error "malformed signature given to call getHandshakeBytes") $

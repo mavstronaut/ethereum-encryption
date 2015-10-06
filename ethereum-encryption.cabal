@@ -8,7 +8,7 @@ cabal-version:       >=1.10
 
 library
   other-extensions:    OverloadedStrings
-  build-depends:       base >=4.7 && <4.8
+  build-depends:       base
                      , binary
                      , cipher-aes
                      , Crypto
@@ -16,14 +16,14 @@ library
                      , crypto-random
                      , crypto-pubkey
                      , crypto-pubkey-types
-                     , bytestring >=0.10 && <0.11
+                     , bytestring
                      , base16-bytestring
                      , ethereum-rlp
                      , ethereum-util
                      , monads-tf
-                     , network >=2.6 && <2.7
-                     , haskoin >=0.1 && <0.2
-                     , entropy >=0.3 && <0.4
+                     , network
+                     , haskoin
+                     , entropy
                      , transformers
                      , ansi-wl-pprint
   hs-source-dirs:      src
