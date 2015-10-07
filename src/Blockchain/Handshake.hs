@@ -167,7 +167,7 @@ encryptECEIS myPrvKey otherPubKey cipherIV msg =
     eceisCipherIV=cipherIV,
     eceisCipher=cipher,
     eceisMac= --trace ("################### mkey: " ++ show mKey) $
-	--trace ("################### cipherWithIV: " ++ show cipherWithIV) $
+      --trace ("################### cipherWithIV: " ++ show cipherWithIV) $
         hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV)
     }
   where

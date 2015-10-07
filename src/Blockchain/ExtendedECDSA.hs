@@ -13,7 +13,6 @@ import Data.Bits
 import Network.Haskoin.Constants
 import Network.Haskoin.Crypto
 import Network.Haskoin.Internals
-import Network.Haskoin.Util
 
 --import Debug.Trace
 
