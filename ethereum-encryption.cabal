@@ -19,7 +19,7 @@ library
                      , bytestring
                      , base16-bytestring
                      , ethereum-rlp
-                     , ethereum-util
+                     , blockapps-util
                      , monads-tf
                      , network
                      , haskoin
