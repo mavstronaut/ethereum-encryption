@@ -18,6 +18,7 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
 import Data.Maybe
 import qualified Network.Haskoin.Internals as H
+import System.Timeout
 
 import Blockchain.Data.RLP
 import Blockchain.ExtendedECDSA
@@ -152,7 +153,7 @@ newtype NodeID = NodeID B.ByteString deriving (Show, Read, Eq)
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x
 
-getServerPubKey::H.PrvKey->String->PortNumber->IO Point
+getServerPubKey::H.PrvKey->String->PortNumber->IO (Maybe Point)
 getServerPubKey myPriv domain port = do
   withSocketsDo $ bracket getSocket close (talk myPriv)
     where
@@ -162,7 +163,7 @@ getServerPubKey myPriv domain port = do
         _ <- connect s (addrAddress serveraddr)
         return s
 
-      talk::H.PrvKey->Socket->IO Point
+      talk::H.PrvKey->Socket->IO (Maybe Point)
       talk prvKey' socket' = do
         let (theType, theRLP) =
               ndPacketToRLP $
@@ -182,6 +183,15 @@ getServerPubKey myPriv domain port = do
                     
         _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
-        pubKey <- B.recv socket' 2000 >>= processDataStream' . B.unpack
+
+        --According to https://groups.google.com/forum/#!topic/haskell-cafe/aqaoEDt7auY, it looks like the only way we can time out UDP recv is to 
+        --use the Haskell timeout....  I did try setting socket options also, but that didn't work.
+        pubKey <- timeout 5000000 (B.recv socket' 2000 >>= processDataStream' . B.unpack)
         
-        return $ hPubKeyToPubKey pubKey
+        return $ fmap hPubKeyToPubKey pubKey
+
+
+
+
+
+
