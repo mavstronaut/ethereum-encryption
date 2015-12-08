@@ -10,6 +10,8 @@ import Network.Socket
 import qualified Network.Socket.ByteString as B
 
 import Control.Exception
+import Control.Monad
+import Control.Spoon
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
@@ -153,7 +155,11 @@ newtype NodeID = NodeID B.ByteString deriving (Show, Read, Eq)
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x
 
-getServerPubKey::H.PrvKey->String->PortNumber->IO (Maybe Point)
+data UDPException = UDPTimeout deriving (Show)
+
+instance Exception UDPException where
+                      
+getServerPubKey::H.PrvKey->String->PortNumber->IO (Either SomeException Point)
 getServerPubKey myPriv domain port = do
   withSocketsDo $ bracket getSocket close (talk myPriv)
     where
@@ -163,7 +169,7 @@ getServerPubKey myPriv domain port = do
         _ <- connect s (addrAddress serveraddr)
         return s
 
-      talk::H.PrvKey->Socket->IO (Maybe Point)
+      talk::H.PrvKey->Socket->IO (Either SomeException Point)
       talk prvKey' socket' = do
         let (theType, theRLP) =
               ndPacketToRLP $
@@ -180,15 +186,17 @@ getServerPubKey myPriv domain port = do
             theSignature =
               word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
             theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
-                    
-        _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
+        _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
         --According to https://groups.google.com/forum/#!topic/haskell-cafe/aqaoEDt7auY, it looks like the only way we can time out UDP recv is to 
         --use the Haskell timeout....  I did try setting socket options also, but that didn't work.
-        pubKey <- timeout 5000000 (B.recv socket' 2000 >>= processDataStream' . B.unpack)
-        
-        return $ fmap hPubKeyToPubKey pubKey
+        pubKey <- try (timeout 5000000 (B.recv socket' 2000 >>= processDataStream' . B.unpack)) :: IO (Either SomeException (Maybe H.PubKey))
+
+        case pubKey of
+          Right Nothing -> return $ Left $ SomeException UDPTimeout
+          Left x -> return $ Left x
+          Right (Just x) -> return $ Right $ hPubKeyToPubKey x
 
 
 
