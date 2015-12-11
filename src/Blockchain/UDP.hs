@@ -12,6 +12,8 @@ import Network.Socket
 import qualified Network.Socket.ByteString as B
 
 import Control.Exception
+import Control.Monad
+import Control.Spoon
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
@@ -20,6 +22,7 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
 import Data.Maybe
 import qualified Network.Haskoin.Internals as H
+import System.Timeout
 
 import Blockchain.Data.RLP
 import Blockchain.ExtendedECDSA
@@ -160,7 +163,11 @@ instance RLPSerializable NodeID where
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x
 
-getServerPubKey::H.PrvKey->String->PortNumber->IO Point
+data UDPException = UDPTimeout deriving (Show)
+
+instance Exception UDPException where
+                      
+getServerPubKey::H.PrvKey->String->PortNumber->IO (Either SomeException Point)
 getServerPubKey myPriv domain port = do
   withSocketsDo $ bracket getSocket close (talk myPriv)
     where
@@ -170,7 +177,7 @@ getServerPubKey myPriv domain port = do
         _ <- connect s (addrAddress serveraddr)
         return s
 
-      talk::H.PrvKey->Socket->IO Point
+      talk::H.PrvKey->Socket->IO (Either SomeException Point)
       talk prvKey' socket' = do
         let (theType, theRLP) =
               ndPacketToRLP $
@@ -187,12 +194,17 @@ getServerPubKey myPriv domain port = do
             theSignature =
               word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
             theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
-                    
+
         _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
 
-        pubKey <- B.recv socket' 2000 >>= processDataStream' . B.unpack
-        
-        return $ hPubKeyToPubKey pubKey
+        --According to https://groups.google.com/forum/#!topic/haskell-cafe/aqaoEDt7auY, it looks like the only way we can time out UDP recv is to 
+        --use the Haskell timeout....  I did try setting socket options also, but that didn't work.
+        pubKey <- try (timeout 5000000 (B.recv socket' 2000 >>= processDataStream' . B.unpack)) :: IO (Either SomeException (Maybe H.PubKey))
+
+        case pubKey of
+          Right Nothing -> return $ Left $ SomeException UDPTimeout
+          Left x -> return $ Left x
+          Right (Just x) -> return $ Right $ hPubKeyToPubKey x
 
 findNeighbors::H.PrvKey->String->PortNumber->IO ()
 findNeighbors myPriv domain port = do
@@ -235,7 +247,6 @@ findNeighbors myPriv domain port = do
         putStrLn "after recv"
         
         --return $ hPubKeyToPubKey pubKey
-
 
 
 

@@ -9,21 +9,22 @@ cabal-version:       >=1.10
 library
   other-extensions:    OverloadedStrings
   build-depends:       base
+                     , base16-bytestring
                      , binary
+                     , blockapps-util
+                     , bytestring
                      , cipher-aes
                      , Crypto
                      , cryptohash
-                     , crypto-random
                      , crypto-pubkey
                      , crypto-pubkey-types
-                     , bytestring
-                     , base16-bytestring
+                     , crypto-random
+                     , entropy
                      , ethereum-rlp
-                     , blockapps-util
+                     , haskoin
                      , monads-tf
                      , network
-                     , haskoin
-                     , entropy
+                     , spoon
                      , transformers
                      , ansi-wl-pprint
   hs-source-dirs:      src
