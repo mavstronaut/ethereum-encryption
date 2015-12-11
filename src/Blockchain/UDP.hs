@@ -1,6 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 
 module Blockchain.UDP (
   getServerPubKey,
+  findNeighbors,
   ndPacketToRLP,
   NodeDiscoveryPacket(..),
   Endpoint(..)
@@ -90,10 +92,12 @@ ndPacketToRLP (Pong (Endpoint ipFrom udpPortFrom tcpPortFrom) tok expiration) = 
                                                                                                          rlpEncode $ toInteger tcpPortFrom],
                                                                                                          rlpEncode tok,
                                                                                                          rlpEncode expiration])
---ndPacketToRLP (FindNode target expiration) = (3, RLPArray [rlpEncode target, rlpEncode expiration])
+
+ndPacketToRLP (FindNode target expiration) = (3, RLPArray [rlpEncode target, rlpEncode expiration])
+
 --ndPacketToRLP (Neighbors ip port id' expiration) = (4, RLPArray [rlpEncode ip, rlpEncode $ toInteger port, rlpEncode id', rlpEncode expiration])
 
-ndPacketToRLP _ = error "Unsupported case in call to ndPacketToRLP"
+ndPacketToRLP x = error $ "Unsupported case in call to ndPacketToRLP: " ++ show x
 
 
 
@@ -149,6 +153,10 @@ processDataStream' _ = error "processDataStream' called with too few bytes"
 
 newtype NodeID = NodeID B.ByteString deriving (Show, Read, Eq)
 
+instance RLPSerializable NodeID where
+  rlpEncode (NodeID x) = RLPString x
+  rlpDecode (RLPString x) = NodeID x
+
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x
 
@@ -185,3 +193,50 @@ getServerPubKey myPriv domain port = do
         pubKey <- B.recv socket' 2000 >>= processDataStream' . B.unpack
         
         return $ hPubKeyToPubKey pubKey
+
+findNeighbors::H.PrvKey->String->PortNumber->IO ()
+findNeighbors myPriv domain port = do
+  withSocketsDo $ bracket getSocket close (talk myPriv)
+    where
+      getSocket = do
+        (serveraddr:_) <- getAddrInfo Nothing (Just domain) (Just $ show port)
+        s <- socket (addrFamily serveraddr) Datagram defaultProtocol
+        _ <- connect s (addrAddress serveraddr)
+        return s
+
+      talk::H.PrvKey->Socket->IO ()
+      talk prvKey' socket' = do
+        let (theType, theRLP) =
+              ndPacketToRLP $
+              FindNode (NodeID $ fst $ B16.decode "eab4e595d178422cb8b31eddde2d6dda74ad16609693614a29a214d2b2f457a7c97a442e74e58afd1b16657c5c5908255a450d8a202e8d3b2b31c9b17e7221f3") 100000000000000000
+            theData = B.unpack $ rlpSerialize theRLP
+            SHA theMsgHash = hash $ B.pack $ (theType:theData)
+
+        ExtendedSignature signature yIsOdd <-
+          H.withSource H.devURandom $ encrypt prvKey' theMsgHash
+
+        let v = if yIsOdd then 1 else 0 -- 0x1c else 0x1b
+            r = H.sigR signature
+            s = H.sigS signature
+            theSignature =
+              word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v]
+            theHash = B.unpack $ SHA3.hash 256 $ B.pack $ theSignature ++ [theType] ++ theData
+
+        putStrLn "before"
+                    
+        _ <- B.send socket' $ B.pack $ theHash ++ theSignature ++ [theType] ++ theData
+
+        putStrLn "after"
+
+        pubKey <- B.recv socket' 10 >>= print -- processDataStream' . B.unpack
+
+        print pubKey
+
+        putStrLn "after recv"
+        
+        --return $ hPubKeyToPubKey pubKey
+
+
+
+
+
