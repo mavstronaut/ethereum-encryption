@@ -13,7 +13,6 @@ import qualified Network.Socket.ByteString as B
 
 import Control.Exception
 import Control.Monad
-import Control.Spoon
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
