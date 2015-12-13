@@ -12,7 +12,6 @@ import Network.Socket
 import qualified Network.Socket.ByteString as B
 
 import Control.Exception
-import Control.Monad
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
@@ -158,6 +157,7 @@ newtype NodeID = NodeID B.ByteString deriving (Show, Read, Eq)
 instance RLPSerializable NodeID where
   rlpEncode (NodeID x) = RLPString x
   rlpDecode (RLPString x) = NodeID x
+  rlpDecode x = error $ "unsupported rlp in rlpDecode for NodeID: " ++ show x
 
 instance Format NodeID where
   format (NodeID x) = BC.unpack $ B16.encode x

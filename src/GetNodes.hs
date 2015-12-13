@@ -9,6 +9,7 @@ import System.Environment
 
 import Blockchain.UDP
 
+main::IO ()
 main = do
   [address] <- getArgs
   
