@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Blockchain.RLPx (
-  runEthCryptM
+  ethCryptConnect
   ) where
 
 import Control.Monad
@@ -15,8 +15,11 @@ import Data.Binary
 import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.Conduit
+import qualified Data.Conduit.Binary as CB
 import Network
-
+import System.IO
+    
 import Blockchain.ExtWord
 
 import qualified Blockchain.AESCTR as AES
@@ -35,9 +38,9 @@ bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y
 bXor _ _ = error "bXor called with two ByteStrings of different length"
 
-runEthCryptM::MonadIO m=>PrivateNumber->PublicPoint->String->PortNumber->EthCryptM m a->m a
-runEthCryptM myPriv otherPubKey ipAddress thePort f = do
-  h <- liftIO $ connectTo ipAddress (PortNumber thePort)
+ethCryptConnect::MonadIO m=>PrivateNumber->PublicPoint->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
+ethCryptConnect myPriv otherPubKey = do
+  --h <- liftIO $ connectTo ipAddress (PortNumber thePort)
 
 --  liftIO $ putStrLn $ "connected over tcp"
   
@@ -45,9 +48,9 @@ runEthCryptM myPriv otherPubKey ipAddress thePort f = do
 
   handshakeInitBytes <- liftIO $ getHandshakeBytes myPriv otherPubKey myNonce
       
-  liftIO $ B.hPut h handshakeInitBytes
+  yield handshakeInitBytes
 
-  handshakeReplyBytes <- liftIO $ B.hGet h 210
+  handshakeReplyBytes <- fmap BL.toStrict $ CB.take 210
   let replyECEISMsg = decode $ BL.fromStrict handshakeReplyBytes
 
   when (B.length handshakeReplyBytes /= 210) $ error "handshake reply didn't contain enough bytes"
@@ -88,20 +91,16 @@ runEthCryptM myPriv otherPubKey ipAddress thePort f = do
   -- liftIO $ putStrLn $ "macEncKey: " ++ show macEncKey
 
 
-  let cState =
-        EthCryptState {
-          handle = h,
-          encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-          decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-          egressMAC=SHA3.update (SHA3.init 256) $
-                    (macEncKey `bXor` otherNonce) `B.append` egressCipher,
-          egressKey=macEncKey,
-          ingressMAC=SHA3.update (SHA3.init 256) $ 
-                     (macEncKey `bXor` myNonce) `B.append` ingressCipher,
-          ingressKey=macEncKey
+  return (
+          EthCryptState { --encrypt
+                          aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+                          mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` otherNonce) `B.append` egressCipher,
+                          key=macEncKey
+          },
+          EthCryptState { --decrypt
+                          aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+                          mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` myNonce) `B.append` ingressCipher,
+                          key=macEncKey
           }
+         )
 
-  (ret, _) <- flip runStateT cState f
-
-  return ret
-  
