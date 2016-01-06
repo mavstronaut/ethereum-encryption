@@ -24,7 +24,7 @@ library
                      , entropy
                      , ethereum-rlp
                      , haskoin
-                     , monads-tf
+                     , mtl
                      , network
                      , spoon
                      , transformers
@@ -54,7 +54,7 @@ executable ethereum-get-nodes
                      , crypto-random
                      , ethereum-rlp
                      , haskoin
-                     , monads-tf
+                     , mtl
                      , network
                      , transformers
   hs-source-dirs:      src
