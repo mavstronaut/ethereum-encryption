@@ -6,7 +6,6 @@ module Blockchain.RLPx (
 
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.PubKey.ECC.DH
@@ -17,8 +16,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Conduit
 import qualified Data.Conduit.Binary as CB
-import Network
-import System.IO
     
 import Blockchain.ExtWord
 
