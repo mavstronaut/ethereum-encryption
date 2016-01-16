@@ -12,6 +12,7 @@ import Network.Socket
 import qualified Network.Socket.ByteString as B
 
 import Control.Exception
+import Control.Monad
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.Types.PubKey.ECC
 import Data.Binary
@@ -124,18 +125,16 @@ showPubKey (H.PubKeyU _) = error "Missing case in showPubKey: PubKeyU"
 
 processDataStream'::[Word8]->IO H.PubKey
 processDataStream'
-  (_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:
-   _:_:_:_:_:_:_:_:_:_:_:_:_:_:_:_:
---   h1:h2:h3:h4:h5:h6:h7:h8:h9:h10:h11:h12:h13:h14:h15:h16:
---   h17:h18:h19:h20:h21:h22:h23:h24:h25:h26:h27:h28:h29:h30:h31:h32:
+  (h1:h2:h3:h4:h5:h6:h7:h8:h9:h10:h11:h12:h13:h14:h15:h16:
+   h17:h18:h19:h20:h21:h22:h23:h24:h25:h26:h27:h28:h29:h30:h31:h32:
    r1:r2:r3:r4:r5:r6:r7:r8:r9:r10:r11:r12:r13:r14:r15:r16:
    r17:r18:r19:r20:r21:r22:r23:r24:r25:r26:r27:r28:r29:r30:r31:r32:
    s1:s2:s3:s4:s5:s6:s7:s8:s9:s10:s11:s12:s13:s14:s15:s16:
    s17:s18:s19:s20:s21:s22:s23:s24:s25:s26:s27:s28:s29:s30:s31:s32:
    v:
    theType:rest) = do
-  let --theHash = bytesToWord256 [h1,h2,h3,h4,h5,h6,h7,h8,h9,h10,h11,h12,h13,h14,h15,h16,
-      --                          h17,h18,h19,h20,h21,h22,h23,h24,h25,h26,h27,h28,h29,h30,h31,h32]
+  let theHash = bytesToWord256 [h1,h2,h3,h4,h5,h6,h7,h8,h9,h10,h11,h12,h13,h14,h15,h16,
+                                h17,h18,h19,h20,h21,h22,h23,h24,h25,h26,h27,h28,h29,h30,h31,h32]
       r = bytesToWord256 [r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,r16,
                           r17,r18,r19,r20,r21,r22,r23,r24,r25,r26,r27,r28,r29,r30,r31,r32]
       s = bytesToWord256 [s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13,s14,s15,s16,
@@ -147,7 +146,16 @@ processDataStream'
 
   let SHA messageHash = hash $ B.pack $ [theType] ++ B.unpack (rlpSerialize rlp)
       publicKey = getPubKeyFromSignature signature messageHash  
+      SHA theHash' = hash $ B.pack $ word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v] ++ [theType] ++ B.unpack (rlpSerialize rlp)
+                  
+  putStrLn $ "##### theType: " ++ show theType
+  putStrLn $ "##### rest: " ++ show rest
+  putStrLn $ "##### theHash: " ++ show theHash
+  putStrLn $ "##### messageHash: " ++ show messageHash
+  putStrLn $ "##### signature: " ++ show signature
 
+  when (theHash /= theHash') $ error "bad UDP data sent from peer, the hash isn't correct"
+                  
   return $ fromMaybe (error "malformed signature in call to processDataStream") $ publicKey
 
 processDataStream' _ = error "processDataStream' called with too few bytes"
