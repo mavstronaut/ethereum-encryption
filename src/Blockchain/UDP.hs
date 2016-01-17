@@ -20,6 +20,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BC
 import Data.Maybe
+import Data.Time.Clock.POSIX
 import qualified Network.Haskoin.Internals as H
 import System.Timeout
 
@@ -186,9 +187,10 @@ getServerPubKey myPriv domain port = do
 
       talk::H.PrvKey->Socket->IO (Either SomeException Point)
       talk prvKey' socket' = do
+        timestamp <- fmap round getPOSIXTime
         let (theType, theRLP) =
               ndPacketToRLP $
-              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) 1451606400
+              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) timestamp
             theData = B.unpack $ rlpSerialize theRLP
             SHA theMsgHash = hash $ B.pack $ (theType:theData)
 
