@@ -190,7 +190,7 @@ getServerPubKey myPriv domain port = do
         timestamp <- fmap round getPOSIXTime
         let (theType, theRLP) =
               ndPacketToRLP $
-              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) timestamp
+              Ping 4 (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (Endpoint "127.0.0.1" (fromIntegral $ port) 30303) (timestamp+50)
             theData = B.unpack $ rlpSerialize theRLP
             SHA theMsgHash = hash $ B.pack $ (theType:theData)
 
