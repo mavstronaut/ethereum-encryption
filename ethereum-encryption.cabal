@@ -5,6 +5,7 @@ author:              jamshid
 maintainer:          jim
 build-type:          Simple
 cabal-version:       >=1.10
+license:             Apache 2.0
 
 library
   other-extensions:    OverloadedStrings
