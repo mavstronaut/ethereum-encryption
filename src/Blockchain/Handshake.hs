@@ -26,6 +26,8 @@ import Data.HMAC
 import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
+import System.Entropy
+
 import Blockchain.ExtendedECDSA
 import Blockchain.ExtWord
 -- import Debug.Trace
@@ -201,7 +203,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
 
  --  putStrLn $ "sharedKey: " ++ show sharedKey
   -- putStrLn $ "msg:       " ++ show msg
-  sig <- H.withSource H.devURandom $ extSignMsg msg (fromMaybe (error "invalid private number in call to getHandshakeBytes") $ H.makePrvKey $ fromIntegral myPriv)
+  sig <- H.withSource getEntropy $ extSignMsg msg (fromMaybe (error "invalid private number in call to getHandshakeBytes") $ H.makePrvKey $ fromIntegral myPriv)
   let
     ephemeral =
       fromMaybe (error "malformed signature given to call getHandshakeBytes") $
