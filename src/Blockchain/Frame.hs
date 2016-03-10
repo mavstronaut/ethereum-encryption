@@ -7,6 +7,7 @@ module Blockchain.Frame (
   ) where
 
 import Control.Monad
+import Control.Monad.Trans.Resource
 import Control.Monad.Trans.State
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
@@ -77,13 +78,20 @@ ethEncrypt ethCryptState = do
 
   ethEncrypt ethCryptState{aesState=aesState'', mac=mac'''}
 
+cbSafeTake::Monad m=>Int->ConduitM B.ByteString B.ByteString m (Maybe BL.ByteString)
+cbSafeTake i = do
+    ret <- CB.take i
+    if BL.length ret /= fromIntegral i
+       then return Nothing
+       else return $ Just ret
+            
 ethDecrypt::Monad m=>EthCryptState->Conduit B.ByteString m B.ByteString
 ethDecrypt ethCryptState = do
-  headCipher <- fmap BL.toStrict $ CB.take 16
-  headMAC <- fmap BL.toStrict $ CB.take 16
+  headCipher <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
+  headMAC <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
 
   let (mac', expectedHeadMAC) = updateMac (mac ethCryptState) (key ethCryptState) headCipher
-  when (expectedHeadMAC /= headMAC) $ error "oops, head mac isn't what I expected"
+  when (expectedHeadMAC /= headMAC) $ error' "oops, head mac isn't what I expected"
 
   let (aesState', header) = AES.decrypt (aesState ethCryptState) headCipher
 
@@ -93,13 +101,13 @@ ethDecrypt ethCryptState = do
         fromIntegral (header `B.index` 2)
       frameBufferSize = (16 - (frameSize `mod` 16)) `mod` 16
   
-  frameCipher <- fmap BL.toStrict $ CB.take (frameSize + frameBufferSize)
-  frameMAC <- fmap BL.toStrict $ CB.take 16
+  frameCipher <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake (frameSize + frameBufferSize)
+  frameMAC <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
 
   let (mac'', mid) = rawUpdateMac mac' frameCipher
       (mac''', expectedFrameMAC) = updateMac mac'' (key ethCryptState) mid
 
-  when (expectedFrameMAC /= frameMAC) $ error "oops, frame mac isn't what I expected"
+  when (expectedFrameMAC /= frameMAC) $ error' "oops, frame mac isn't what I expected"
 
   let (aesState'', fullFrame) = AES.decrypt aesState' frameCipher
 

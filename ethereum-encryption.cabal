@@ -27,6 +27,7 @@ library
                      , haskoin
                      , mtl
                      , network
+                     , resourcet
                      , spoon
                      , time
                      , transformers
