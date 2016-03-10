@@ -20,6 +20,7 @@ import qualified Data.Conduit.Binary as CB
 import Blockchain.ExtWord
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.Error
 import Blockchain.Frame
 import Blockchain.Handshake
 
@@ -33,7 +34,7 @@ intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
 
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y
-bXor _ _ = error "bXor called with two ByteStrings of different length"
+bXor _ _ = error' "bXor called with two ByteStrings of different length"
 
 ethCryptConnect::MonadIO m=>PrivateNumber->PublicPoint->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
 ethCryptConnect myPriv otherPubKey = do

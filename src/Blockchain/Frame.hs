@@ -18,10 +18,11 @@ import qualified Data.Conduit.Binary as CB
 import Data.Maybe
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.Error
 
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 
-bXor x y = error $
+bXor x y = error' $
            "bXor called with two ByteStrings of different length: length string1 = " ++
            show (B.length x) ++ ", length string2 = " ++ show (B.length y)
 
