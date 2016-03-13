@@ -80,17 +80,19 @@ extSignMsg h d = do
 
 -------------------
 
-getPubKeyFromSignature::ExtendedSignature->Word256->Maybe PubKey
-getPubKeyFromSignature (ExtendedSignature sig yIsOdd) msgHash = 
-  case ys of
-    (firstY:secondY:_) ->
-      let
-        correctY = if odd firstY == yIsOdd then firstY else secondY
-        Just bigR = makePoint (fromIntegral r) correctY
+recoverPoint :: FieldN -> Bool -> Maybe Point
+recoverPoint r yIsOdd = do
+  firstY:secondY:_ <- case quadraticResidue $ (fromIntegral r)^3 + 7 of
+    [] -> Nothing
+    l -> Just l
+  makePoint (fromIntegral r) $ if odd firstY == yIsOdd then firstY else secondY
 
-      in Just $ makePubKey $ ((s / r) `mulPoint` bigR) `addPoint` ((fromIntegral curveN - fromIntegral msgHash/r) `mulPoint` curveG)
-    _ -> Nothing
-  where
-    r = sigR sig
-    s = sigS sig
-    ys = quadraticResidue $ fromIntegral r^(3::Integer)+7
+getPubKeyFromSignature :: ExtendedSignature->Word256-> Maybe PubKey
+getPubKeyFromSignature (ExtendedSignature sig yIsOdd) msgHash = do
+  let r = sigR sig
+      s = sigS sig
+      h = fromIntegral msgHash
+  p <- recoverPoint r yIsOdd
+  w <- if r == 0 then Nothing else Just $ recip r
+  return $ makePubKey $ shamirsTrick (s * w) p (-h * w) curveG
+
