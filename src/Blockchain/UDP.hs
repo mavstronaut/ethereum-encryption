@@ -149,12 +149,6 @@ processDataStream'
       publicKey = getPubKeyFromSignature signature messageHash  
       SHA theHash' = hash $ B.pack $ word256ToBytes (fromIntegral r) ++ word256ToBytes (fromIntegral s) ++ [v] ++ [theType] ++ B.unpack (rlpSerialize rlp)
                   
-  putStrLn $ "##### theType: " ++ show theType
-  putStrLn $ "##### rest: " ++ show rest
-  putStrLn $ "##### theHash: " ++ show theHash
-  putStrLn $ "##### messageHash: " ++ show messageHash
-  putStrLn $ "##### signature: " ++ show signature
-
   when (theHash /= theHash') $ error "bad UDP data sent from peer, the hash isn't correct"
                   
   return $ fromMaybe (error "malformed signature in call to processDataStream") $ publicKey
