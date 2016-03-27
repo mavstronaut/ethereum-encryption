@@ -82,7 +82,7 @@ extSignMsg h d = do
 
 recoverPoint :: FieldN -> Bool -> Maybe Point
 recoverPoint r yIsOdd = do
-  firstY:secondY:_ <- case quadraticResidue $ (fromIntegral r)^3 + 7 of
+  firstY:secondY:_ <- case quadraticResidue $ (fromIntegral r)^(3::Integer) + 7 of
     [] -> Nothing
     l -> Just l
   makePoint (fromIntegral r) $ if odd firstY == yIsOdd then firstY else secondY
