@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Blockchain.RLPx (
-  ethCryptConnect
+  ethCryptConnect,
+  ethCryptAccept
   ) where
 
 import Control.Monad
@@ -23,6 +24,22 @@ import qualified Blockchain.AESCTR as AES
 import Blockchain.Error
 import Blockchain.Frame
 import Blockchain.Handshake
+
+
+
+import           Crypto.PubKey.ECC.DH
+import           Crypto.Types.PubKey.ECC
+import           Crypto.Random
+import qualified Crypto.Hash.SHA3 as SHA3
+import           Crypto.Cipher.AES
+import qualified Network.Haskoin.Internals as H
+
+import Data.Maybe
+import Blockchain.ExtendedECDSA
+import Blockchain.UDP
+
+
+
 
 --import Debug.Trace
 
@@ -101,4 +118,100 @@ ethCryptConnect myPriv otherPubKey = do
                           key=macEncKey
           }
          )
+
+
+add :: B.ByteString
+    -> B.ByteString
+    -> B.ByteString
+add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
+add _ _ = error "add called with ByteString of length not 32"
+
+
+hPubKeyToPubKey::H.PubKey->Point
+hPubKeyToPubKey pubKey =
+  Point (fromIntegral x) (fromIntegral y)
+  where
+    x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX hPoint
+    y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY hPoint
+    hPoint = H.pubKeyPoint pubKey
+
+
+
+ethCryptAccept::MonadIO m=>PrivateNumber->Point->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
+ethCryptAccept myPriv otherPoint = do
+--tcpHandshakeServer :: PrivateNumber-> Point-> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
+--tcpHandshakeServer prv otherPoint = go
+    hsBytes <- CB.take 307
+
+    let eceisMsgIncoming = (decode $ hsBytes :: ECEISMessage)
+        eceisMsgIBytes = (decryptECEIS myPriv eceisMsgIncoming )
+        iv = B.replicate 16 0
+
+    let SharedKey sharedKey = getShared theCurve myPriv otherPoint
+        otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
+        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
+        r = bytesToWord256 $ B.unpack $ B.take 32 $ eceisMsgIBytes
+        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eceisMsgIBytes
+        v = head . B.unpack $ B.take 1 $ B.drop 64 eceisMsgIBytes
+        yIsOdd = v == 1
+
+        extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
+        otherEphemeral = hPubKeyToPubKey $
+                            fromMaybe (error "malformed signature in tcpHandshakeServer") $
+                            getPubKeyFromSignature extSig msg
+
+
+    entropyPool <- liftIO createEntropyPool
+    let g = cprgCreate entropyPool :: SystemRNG
+        (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
+        myEphemeral = calculatePublic theCurve myPriv
+        myNonce = 25 :: Word256
+        ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
+        eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ encode $ ackMsg )
+        eceisMsgOBytes = BL.toStrict $ encode eceisMsgOutgoing
+
+    yield $ eceisMsgOBytes
+
+    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
+        ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
+
+        myNonceBS = B.pack $ word256ToBytes myNonce
+        frameDecKey = otherNonce `add`
+                        myNonceBS `add`
+                        (B.pack ephemeralSharedSecretBytes) `add`
+                        (B.pack ephemeralSharedSecretBytes)
+        macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
+
+    {-
+    let cState =
+          EthCryptStateLite {
+            encryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+            decryptState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+            egressMAC=
+            egressKey=macEncKey,
+            ingressMAC=
+            ingressKey=macEncKey,
+            peerId = calculatePublic theCurve prv,
+            isClient = False,
+            afterHello = False
+          }
+
+    return cState
+    -}
+
+    return (
+      EthCryptState { --encrypt
+         aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+         mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` otherNonce) `B.append` eceisMsgOBytes,
+         key=macEncKey
+         },
+      EthCryptState { --decrypt
+        aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
+        mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` myNonceBS) `B.append` (BL.toStrict hsBytes),
+        key=macEncKey
+        }
+      )
+
+
+
 
