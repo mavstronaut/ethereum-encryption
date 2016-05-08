@@ -1,7 +1,6 @@
 
 module Blockchain.Frame (
   EthCryptState(..),
-  EthCryptM,
   ethEncrypt,
   ethDecrypt
   ) where
@@ -32,8 +31,6 @@ data EthCryptState =
     mac::SHA3.Ctx,
     key::B.ByteString
     }
-
-type EthCryptM a = StateT EthCryptState a
 
 rawUpdateMac::SHA3.Ctx->B.ByteString->(SHA3.Ctx, B.ByteString)
 rawUpdateMac theMac value = 
