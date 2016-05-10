@@ -6,7 +6,6 @@ module Blockchain.Frame (
   ) where
 
 import Control.Monad
-import Control.Monad.Trans.State
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
 import Data.Bits

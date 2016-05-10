@@ -10,6 +10,7 @@ import Control.Monad.IO.Class
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
 import Crypto.PubKey.ECC.DH
+import Crypto.Random
 import Crypto.Types.PubKey.ECC
 import Data.Binary
 import Data.Bits
@@ -17,26 +18,17 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Conduit
 import qualified Data.Conduit.Binary as CB
-    
-import Blockchain.ExtWord
+import Data.Maybe
+import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Error
+import Blockchain.ExtendedECDSA
+import Blockchain.ExtWord
 import Blockchain.Frame
 import Blockchain.Handshake
 
 
-
-import           Crypto.PubKey.ECC.DH
-import           Crypto.Types.PubKey.ECC
-import           Crypto.Random
-import qualified Crypto.Hash.SHA3 as SHA3
-import           Crypto.Cipher.AES
-import qualified Network.Haskoin.Internals as H
-
-import Data.Maybe
-import Blockchain.ExtendedECDSA
-import Blockchain.UDP
 
 
 
@@ -76,10 +68,7 @@ ethCryptConnect myPriv otherPubKey = do
 ------------------------------
 
   let m_originated=False -- hardcoded for now, I can only connect as client
-      add::B.ByteString->B.ByteString->B.ByteString
-      add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
-      add _ _ = error "add called with ByteString of length not 32"
-
+      
       otherNonce=B.pack $ word256ToBytes $ ackNonce ackMsg
 
       SharedKey shared' = getShared theCurve myPriv (ackEphemeralPubKey ackMsg)
@@ -119,13 +108,9 @@ ethCryptConnect myPriv otherPubKey = do
           }
          )
 
-
-add :: B.ByteString
-    -> B.ByteString
-    -> B.ByteString
+add::B.ByteString->B.ByteString->B.ByteString
 add acc val | B.length acc ==32 && B.length val == 32 = SHA3.hash 256 $ val `B.append` acc
 add _ _ = error "add called with ByteString of length not 32"
-
 
 hPubKeyToPubKey::H.PubKey->Point
 hPubKeyToPubKey pubKey =
@@ -163,16 +148,16 @@ ethCryptAccept myPriv otherPoint = do
 
     entropyPool <- liftIO createEntropyPool
     let g = cprgCreate entropyPool :: SystemRNG
-        (myPriv, _) = generatePrivate g $ getCurveByName SEC_p256k1
-        myEphemeral = calculatePublic theCurve myPriv
+        (myPriv', _) = generatePrivate g $ getCurveByName SEC_p256k1
+        myEphemeral = calculatePublic theCurve myPriv'
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
-        eceisMsgOutgoing = encryptECEIS myPriv otherPoint iv ( BL.toStrict $ encode $ ackMsg )
+        eceisMsgOutgoing = encryptECEIS myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
         eceisMsgOBytes = BL.toStrict $ encode eceisMsgOutgoing
 
     yield $ eceisMsgOBytes
 
-    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv otherEphemeral
+    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv' otherEphemeral
         ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
 
         myNonceBS = B.pack $ word256ToBytes myNonce
