@@ -89,7 +89,7 @@ ethDecrypt ethCryptState = do
   headMAC <- fmap (BL.toStrict . fromMaybe (throw PeerHungUp)) $ cbSafeTake 16
 
   let (mac', expectedHeadMAC) = updateMac (mac ethCryptState) (key ethCryptState) headCipher
-  when (expectedHeadMAC /= headMAC) $ error' "oops, head mac isn't what I expected"
+  when (expectedHeadMAC /= headMAC) $ throw HeadMacIncorrect
 
   let (aesState', header) = AES.decrypt (aesState ethCryptState) headCipher
 
@@ -105,7 +105,7 @@ ethDecrypt ethCryptState = do
   let (mac'', mid) = rawUpdateMac mac' frameCipher
       (mac''', expectedFrameMAC) = updateMac mac'' (key ethCryptState) mid
 
-  when (expectedFrameMAC /= frameMAC) $ error' "oops, frame mac isn't what I expected"
+  when (expectedFrameMAC /= frameMAC) $ throw FrameMacIncorrect
 
   let (aesState'', fullFrame) = AES.decrypt aesState' frameCipher
 
