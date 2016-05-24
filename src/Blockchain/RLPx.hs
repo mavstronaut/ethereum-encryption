@@ -5,6 +5,7 @@ module Blockchain.RLPx (
   ethCryptAccept
   ) where
 
+import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class
 import Crypto.Cipher.AES
@@ -23,6 +24,7 @@ import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Error
+import Blockchain.EthEncryptionException
 import Blockchain.ExtendedECDSA
 import Blockchain.ExtWord
 import Blockchain.Frame
@@ -60,7 +62,7 @@ ethCryptConnect myPriv otherPubKey = do
   handshakeReplyBytes <- fmap BL.toStrict $ CB.take 210
   let replyECEISMsg = decode $ BL.fromStrict handshakeReplyBytes
 
-  when (B.length handshakeReplyBytes /= 210) $ error "handshake reply didn't contain enough bytes"
+  when (B.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
   let ackMsg = bytesToAckMsg $ B.unpack $ decryptECEIS myPriv replyECEISMsg
 

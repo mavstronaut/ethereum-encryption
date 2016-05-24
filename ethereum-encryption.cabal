@@ -25,6 +25,7 @@ library
                      , entropy
                      , ethereum-rlp
                      , haskoin
+                     , lifted-base
                      , mtl
                      , network
                      , resourcet
@@ -41,6 +42,7 @@ library
                      , Blockchain.Handshake
                      , Blockchain.RLPx
                      , Blockchain.UDP
+  other-modules:       Blockchain.EthEncryptionException
 --  extra-libraries:
 
 --executable ethereum-encryption

@@ -5,7 +5,9 @@ module Blockchain.Frame (
   ethDecrypt
   ) where
 
+import Control.Exception.Lifted
 import Control.Monad
+import Control.Monad.IO.Class
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
 import Data.Bits
@@ -17,6 +19,7 @@ import Data.Maybe
 
 import qualified Blockchain.AESCTR as AES
 import Blockchain.Error
+import Blockchain.EthEncryptionException
 
 bXor::B.ByteString->B.ByteString->B.ByteString
 bXor x y | B.length x == B.length y = B.pack $ B.zipWith xor x y 
@@ -82,8 +85,8 @@ cbSafeTake i = do
             
 ethDecrypt::Monad m=>EthCryptState->Conduit B.ByteString m B.ByteString
 ethDecrypt ethCryptState = do
-  headCipher <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
-  headMAC <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
+  headCipher <- fmap (BL.toStrict . fromMaybe (throw PeerHungUp)) $ cbSafeTake 16
+  headMAC <- fmap (BL.toStrict . fromMaybe (throw PeerHungUp)) $ cbSafeTake 16
 
   let (mac', expectedHeadMAC) = updateMac (mac ethCryptState) (key ethCryptState) headCipher
   when (expectedHeadMAC /= headMAC) $ error' "oops, head mac isn't what I expected"
@@ -96,8 +99,8 @@ ethDecrypt ethCryptState = do
         fromIntegral (header `B.index` 2)
       frameBufferSize = (16 - (frameSize `mod` 16)) `mod` 16
   
-  frameCipher <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake (frameSize + frameBufferSize)
-  frameMAC <- fmap (BL.toStrict . fromMaybe (error' "Peer hung up")) $ cbSafeTake 16
+  frameCipher <- fmap (BL.toStrict . fromMaybe (throw PeerHungUp)) $ cbSafeTake (frameSize + frameBufferSize)
+  frameMAC <- fmap (BL.toStrict . fromMaybe (throw PeerHungUp)) $ cbSafeTake 16
 
   let (mac'', mid) = rawUpdateMac mac' frameCipher
       (mac''', expectedFrameMAC) = updateMac mac'' (key ethCryptState) mid
