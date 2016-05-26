@@ -46,7 +46,7 @@ updateMac theMac theKey value =
 
 ethEncrypt::Monad m=>EthCryptState->Conduit B.ByteString m B.ByteString
 ethEncrypt ethCryptState = do
-  bytes <- fmap (fromMaybe (error "Stream closed abruptly")) await
+  bytes <- fmap (throw PeerHungUp) await
   let frameSize = B.length bytes
       frameBuffSize = (16 - frameSize `mod` 16) `mod` 16
       header =
