@@ -7,7 +7,6 @@ module Blockchain.Frame (
 
 import Control.Exception.Lifted
 import Control.Monad
-import Control.Monad.IO.Class
 import Crypto.Cipher.AES
 import qualified Crypto.Hash.SHA3 as SHA3
 import Data.Bits
