@@ -42,7 +42,7 @@ library
                      , Blockchain.Handshake
                      , Blockchain.RLPx
                      , Blockchain.UDP
-  other-modules:       Blockchain.EthEncryptionException
+                     , Blockchain.EthEncryptionException
 --  extra-libraries:
 
 --executable ethereum-encryption
