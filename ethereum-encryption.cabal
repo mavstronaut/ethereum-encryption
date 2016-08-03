@@ -41,7 +41,6 @@ library
                      , Blockchain.Frame
                      , Blockchain.Handshake
                      , Blockchain.RLPx
-                     , Blockchain.UDP
                      , Blockchain.EthEncryptionException
 --  extra-libraries:
 
