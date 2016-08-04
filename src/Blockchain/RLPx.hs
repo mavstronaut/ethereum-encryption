@@ -60,12 +60,11 @@ ethCryptConnect myPriv otherPubKey = do
       
   yield handshakeInitBytes
 
-  handshakeReplyBytes <- fmap BL.toStrict $ CB.take 210
-  let replyECIESMsg = decode $ BL.fromStrict handshakeReplyBytes
+  handshakeReplyBytes <- CB.take 210
 
-  when (B.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
+  when (BL.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ ECIES.decryptECIES myPriv replyECIESMsg
+  let ackMsg = bytesToAckMsg $ B.unpack $ ECIES.decrypt myPriv handshakeReplyBytes
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -80,8 +79,8 @@ ethCryptConnect myPriv otherPubKey = do
       frameDecKey = myNonce `add` otherNonce `add` shared `add` shared
       macEncKey = frameDecKey `add` shared
 
-      ingressCipher = if m_originated then handshakeInitBytes else handshakeReplyBytes
-      egressCipher = if m_originated then handshakeReplyBytes else handshakeInitBytes
+      ingressCipher = if m_originated then handshakeInitBytes else BL.toStrict handshakeReplyBytes
+      egressCipher = if m_originated then BL.toStrict handshakeReplyBytes else handshakeInitBytes
 
   -- liftIO $ putStrLn $ "myNonce `add` otherNonce: " ++ show (myNonce `add` otherNonce)
   -- liftIO $ putStrLn $ "myNonce `add` otherNonce `add` shared: " ++ show (myNonce `add` otherNonce `add` shared)
@@ -139,7 +138,7 @@ ethCryptAccept myPriv otherPoint = do
     
     liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (ECIES.eciesForm eciesMsgIncoming)
         
-    let eciesMsgIBytes = (ECIES.decryptECIES myPriv eciesMsgIncoming )
+    let eciesMsgIBytes = (ECIES.decrypt myPriv hsBytes )
         iv = B.replicate 16 0
 
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
@@ -162,8 +161,7 @@ ethCryptAccept myPriv otherPoint = do
         myEphemeral = calculatePublic theCurve myPriv'
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
-        eciesMsgOutgoing = ECIES.encryptECIES myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
-        eciesMsgOBytes = BL.toStrict $ encode eciesMsgOutgoing
+        eciesMsgOBytes = BL.toStrict $ ECIES.encrypt myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
 
     yield $ eciesMsgOBytes
 

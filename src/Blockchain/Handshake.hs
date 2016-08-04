@@ -137,8 +137,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
   -- putStrLn $ "pubk: " ++ show pubk
   -- putStrLn $ "theData: " ++ show theData
 
-  let eciesMsg = ECIES.encryptECIES myPriv otherPubKey cipherIV theData 
-  let eciesMsgBytes = BL.toStrict $ encode eciesMsg
+  let eciesMsgBytes = BL.toStrict $ ECIES.encrypt myPriv otherPubKey cipherIV theData 
   
   -- putStrLn $ "eciesMsg: "
   -- putStrLn $ show eciesMsg

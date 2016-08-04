@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Blockchain.ECIES (
-  decryptECIES,
-  encryptECIES,
+  decrypt,
+  encrypt,
   ECIESMessage(..)
   ) where
 
@@ -20,6 +20,16 @@ import Data.HMAC
 
 import Blockchain.ExtWord
 -- import Debug.Trace
+
+encrypt::PrivateNumber->Point->B.ByteString->B.ByteString->BL.ByteString
+encrypt myPrvKey otherPubKey iv bytes =
+  encode $ encryptECIES myPrvKey otherPubKey iv bytes
+
+decrypt::PrivateNumber->BL.ByteString->B.ByteString
+decrypt prvKey bytes =
+  decryptECIES prvKey $ decode bytes
+
+-----------------
 
 theCurve::Curve
 theCurve = getCurveByName SEC_p256k1
@@ -77,8 +87,8 @@ errorHead _ (x:_) = x
 errorHead msg _ = error msg
 
 
-encrypt::B.ByteString->B.ByteString->B.ByteString->B.ByteString
-encrypt key cipherIV input = encryptCTR (initAES key) cipherIV input 
+encrypt'::B.ByteString->B.ByteString->B.ByteString->B.ByteString
+encrypt' key cipherIV input = encryptCTR (initAES key) cipherIV input 
 
 encryptECIES::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->ECIESMessage
 encryptECIES myPrvKey otherPubKey cipherIV msg =
@@ -99,7 +109,7 @@ encryptECIES myPrvKey otherPubKey cipherIV msg =
     mKeyMaterial = -- trace ("##################### sharedKey: " ++ show (B.take 16 $ B.drop 16 key)) $
                    (B.take 16 $ B.drop 16 key)
     mKey = hash mKeyMaterial
-    cipher = encrypt eKey cipherIV msg
+    cipher = encrypt' eKey cipherIV msg
     cipherWithIV = cipherIV `B.append` cipher
 
 decryptECIES::PrivateNumber->ECIESMessage->B.ByteString
