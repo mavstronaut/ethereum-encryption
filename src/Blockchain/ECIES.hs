@@ -25,10 +25,14 @@ encrypt::PrivateNumber->Point->B.ByteString->B.ByteString->BL.ByteString
 encrypt myPrvKey otherPubKey iv bytes =
   encode $ encryptECIES myPrvKey otherPubKey iv bytes
 
-decrypt::PrivateNumber->BL.ByteString->B.ByteString
+decrypt::PrivateNumber->BL.ByteString->Maybe B.ByteString
 decrypt prvKey bytes =
-  decryptECIES prvKey $ decode bytes
-
+  if eciesCipherIV eciesMsg == B.replicate 16 0
+  then Just $ decryptECIES prvKey eciesMsg
+  else Nothing
+  where
+    eciesMsg = decode bytes
+  
 -----------------
 
 theCurve::Curve

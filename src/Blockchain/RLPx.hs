@@ -64,7 +64,7 @@ ethCryptConnect myPriv otherPubKey = do
 
   when (BL.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ ECIES.decrypt myPriv handshakeReplyBytes
+  let ackMsg = bytesToAckMsg $ B.unpack $ fromMaybe (error "error in ethCryptConnect, invalid EXIES packet in response") $ ECIES.decrypt myPriv handshakeReplyBytes
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -138,7 +138,12 @@ ethCryptAccept myPriv otherPoint = do
     
     liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (ECIES.eciesForm eciesMsgIncoming)
         
-    let eciesMsgIBytes = (ECIES.decrypt myPriv hsBytes )
+    let eciesMsgIBytes =
+          case ECIES.decrypt myPriv hsBytes of
+           Nothing -> error "peer seems to be using EIP 8"
+           Just x -> x
+
+           
         iv = B.replicate 16 0
 
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
