@@ -23,6 +23,7 @@ import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.ECIES
 import Blockchain.Error
 import Blockchain.EthEncryptionException
 import Blockchain.ExtendedECDSA

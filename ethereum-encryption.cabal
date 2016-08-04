@@ -38,6 +38,7 @@ library
   ghc-options:         -Wall -O2
   exposed-modules:     Blockchain.AESCTR
                      , Blockchain.ExtendedECDSA
+                     , Blockchain.ECIES
                      , Blockchain.Frame
                      , Blockchain.Handshake
                      , Blockchain.RLPx
