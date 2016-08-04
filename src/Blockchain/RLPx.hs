@@ -131,7 +131,14 @@ ethCryptAccept myPriv otherPoint = do
     hsBytes <- CB.take 307
 
     let eceisMsgIncoming = (decode $ hsBytes :: ECEISMessage)
-        eceisMsgIBytes = (decryptECEIS myPriv eceisMsgIncoming )
+
+    when (eceisForm eceisMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
+    
+    when (not $ eceisForm eceisMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
+    
+    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (eceisForm eceisMsgIncoming)
+        
+    let eceisMsgIBytes = (decryptECEIS myPriv eceisMsgIncoming )
         iv = B.replicate 16 0
 
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
