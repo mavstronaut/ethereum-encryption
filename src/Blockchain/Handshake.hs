@@ -22,7 +22,7 @@ import qualified Network.Haskoin.Internals as H
 
 import Blockchain.ExtendedECDSA
 import Blockchain.ExtWord
-import Blockchain.ECIES
+import qualified Blockchain.ECIES as ECIES
 
 
 -- import Debug.Trace
@@ -137,7 +137,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
   -- putStrLn $ "pubk: " ++ show pubk
   -- putStrLn $ "theData: " ++ show theData
 
-  let eciesMsg = encryptECIES myPriv otherPubKey cipherIV theData 
+  let eciesMsg = ECIES.encryptECIES myPriv otherPubKey cipherIV theData 
   let eciesMsgBytes = BL.toStrict $ encode eciesMsg
   
   -- putStrLn $ "eciesMsg: "

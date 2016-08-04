@@ -23,7 +23,7 @@ import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
-import Blockchain.ECIES
+import qualified Blockchain.ECIES as ECIES
 import Blockchain.Error
 import Blockchain.EthEncryptionException
 import Blockchain.ExtendedECDSA
@@ -65,7 +65,7 @@ ethCryptConnect myPriv otherPubKey = do
 
   when (B.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ decryptECIES myPriv replyECIESMsg
+  let ackMsg = bytesToAckMsg $ B.unpack $ ECIES.decryptECIES myPriv replyECIESMsg
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -131,15 +131,15 @@ ethCryptAccept myPriv otherPoint = do
 --tcpHandshakeServer prv otherPoint = go
     hsBytes <- CB.take 307
 
-    let eciesMsgIncoming = (decode $ hsBytes :: ECIESMessage)
+    let eciesMsgIncoming = decode $ hsBytes::ECIES.ECIESMessage
 
-    when (eciesForm eciesMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
+    when (ECIES.eciesForm eciesMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
     
-    when (not $ eciesForm eciesMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
+    when (not $ ECIES.eciesForm eciesMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
     
-    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (eciesForm eciesMsgIncoming)
+    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (ECIES.eciesForm eciesMsgIncoming)
         
-    let eciesMsgIBytes = (decryptECIES myPriv eciesMsgIncoming )
+    let eciesMsgIBytes = (ECIES.decryptECIES myPriv eciesMsgIncoming )
         iv = B.replicate 16 0
 
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
@@ -162,7 +162,7 @@ ethCryptAccept myPriv otherPoint = do
         myEphemeral = calculatePublic theCurve myPriv'
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
-        eciesMsgOutgoing = encryptECIES myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
+        eciesMsgOutgoing = ECIES.encryptECIES myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
         eciesMsgOBytes = BL.toStrict $ encode eciesMsgOutgoing
 
     yield $ eciesMsgOBytes
