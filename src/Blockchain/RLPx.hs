@@ -60,11 +60,11 @@ ethCryptConnect myPriv otherPubKey = do
   yield handshakeInitBytes
 
   handshakeReplyBytes <- fmap BL.toStrict $ CB.take 210
-  let replyECEISMsg = decode $ BL.fromStrict handshakeReplyBytes
+  let replyECIESMsg = decode $ BL.fromStrict handshakeReplyBytes
 
   when (B.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ decryptECEIS myPriv replyECEISMsg
+  let ackMsg = bytesToAckMsg $ B.unpack $ decryptECIES myPriv replyECIESMsg
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -130,23 +130,23 @@ ethCryptAccept myPriv otherPoint = do
 --tcpHandshakeServer prv otherPoint = go
     hsBytes <- CB.take 307
 
-    let eceisMsgIncoming = (decode $ hsBytes :: ECEISMessage)
+    let eciesMsgIncoming = (decode $ hsBytes :: ECIESMessage)
 
-    when (eceisForm eceisMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
+    when (eciesForm eciesMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
     
-    when (not $ eceisForm eceisMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
+    when (not $ eciesForm eciesMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
     
-    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (eceisForm eceisMsgIncoming)
+    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (eciesForm eciesMsgIncoming)
         
-    let eceisMsgIBytes = (decryptECEIS myPriv eceisMsgIncoming )
+    let eciesMsgIBytes = (decryptECIES myPriv eciesMsgIncoming )
         iv = B.replicate 16 0
 
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
-        otherNonce = B.take 32 $ B.drop 161 $ eceisMsgIBytes
+        otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
         msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
-        r = bytesToWord256 $ B.unpack $ B.take 32 $ eceisMsgIBytes
-        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eceisMsgIBytes
-        v = head . B.unpack $ B.take 1 $ B.drop 64 eceisMsgIBytes
+        r = bytesToWord256 $ B.unpack $ B.take 32 $ eciesMsgIBytes
+        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eciesMsgIBytes
+        v = head . B.unpack $ B.take 1 $ B.drop 64 eciesMsgIBytes
         yIsOdd = v == 1
 
         extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
@@ -161,10 +161,10 @@ ethCryptAccept myPriv otherPoint = do
         myEphemeral = calculatePublic theCurve myPriv'
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
-        eceisMsgOutgoing = encryptECEIS myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
-        eceisMsgOBytes = BL.toStrict $ encode eceisMsgOutgoing
+        eciesMsgOutgoing = encryptECIES myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
+        eciesMsgOBytes = BL.toStrict $ encode eciesMsgOutgoing
 
-    yield $ eceisMsgOBytes
+    yield $ eciesMsgOBytes
 
     let SharedKey ephemeralSharedSecret = getShared theCurve myPriv' otherEphemeral
         ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
@@ -196,7 +196,7 @@ ethCryptAccept myPriv otherPoint = do
     return (
       EthCryptState { --encrypt
          aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
-         mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` otherNonce) `B.append` eceisMsgOBytes,
+         mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` otherNonce) `B.append` eciesMsgOBytes,
          key=macEncKey
          },
       EthCryptState { --decrypt

@@ -6,9 +6,9 @@ module Blockchain.Handshake (
   bytesToAckMsg,
   bytesToPoint,
   pointToBytes,
-  decryptECEIS,
-  encryptECEIS,
-  ECEISMessage(..)
+  decryptECIES,
+  encryptECIES,
+  ECIESMessage(..)
   ) where
 
 import Crypto.Cipher.AES
@@ -68,16 +68,16 @@ sigToBytes (ExtendedSignature signature yIsOdd) =
   word256ToBytes (fromIntegral $ H.sigS signature) ++
   [if yIsOdd then 1 else 0]
 
-data ECEISMessage =
-  ECEISMessage {
-    eceisForm::Word8, --See ansi x9.62 section 4.3.6 (I currently only handle form=4)
-    eceisPubKey::Point,
-    eceisCipherIV::B.ByteString,
-    eceisCipher::B.ByteString,
-    eceisMac::[Word8]
+data ECIESMessage =
+  ECIESMessage {
+    eciesForm::Word8, --See ansi x9.62 section 4.3.6 (I currently only handle form=4)
+    eciesPubKey::Point,
+    eciesCipherIV::B.ByteString,
+    eciesCipher::B.ByteString,
+    eciesMac::[Word8]
     } deriving (Show)
 
-instance Binary ECEISMessage where
+instance Binary ECIESMessage where
   get = do
     bs <- getRemainingLazyByteString
     let bsStrict = BL.toStrict $ bs
@@ -95,16 +95,16 @@ instance Binary ECEISMessage where
     -- cipherIV <- getByteString 16
     -- cipher <- getByteString (length - (113))  
     -- mac <- sequence $ replicate 32 getWord8
-    return $ ECEISMessage form (Point pubKeyX pubKeyY) cipherIV cipher mac
+    return $ ECIESMessage form (Point pubKeyX pubKeyY) cipherIV cipher mac
 
-  put (ECEISMessage form (Point pubKeyX pubKeyY) cipherIV cipher mac) = do
+  put (ECIESMessage form (Point pubKeyX pubKeyY) cipherIV cipher mac) = do
     putWord8 form
     putByteString (B.pack . word256ToBytes . fromInteger $ pubKeyX)
     putByteString (B.pack . word256ToBytes . fromInteger $ pubKeyY)
     putByteString cipherIV
     putByteString cipher
     sequence_ $ map putWord8 mac
-  put x = error $ "unsupported case in call to put for ECEISMessage: " ++ show x
+  put x = error $ "unsupported case in call to put for ECIESMessage: " ++ show x
 
 data AckMessage =
   AckMessage {
@@ -152,21 +152,21 @@ bytesToAckMsg bytes | length bytes == 97 =
         1 -> True
         _ -> error "known peer byte in ackMessage is neither 0 nor 1"
     }
-bytesToAckMsg _ = error "wrong number of bytes in call to bytesToECEISMsg"
+bytesToAckMsg _ = error "wrong number of bytes in call to bytesToECIESMsg"
 
 
 
 encrypt::B.ByteString->B.ByteString->B.ByteString->B.ByteString
 encrypt key cipherIV input = encryptCTR (initAES key) cipherIV input 
 
-encryptECEIS::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->ECEISMessage
-encryptECEIS myPrvKey otherPubKey cipherIV msg =
-  ECEISMessage {
-    eceisForm = 4, --form=4 indicates pubkey is not compressed
-    eceisPubKey=calculatePublic theCurve myPrvKey,
-    eceisCipherIV=cipherIV,
-    eceisCipher=cipher,
-    eceisMac= --trace ("################### mkey: " ++ show mKey) $
+encryptECIES::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->ECIESMessage
+encryptECIES myPrvKey otherPubKey cipherIV msg =
+  ECIESMessage {
+    eciesForm = 4, --form=4 indicates pubkey is not compressed
+    eciesPubKey=calculatePublic theCurve myPrvKey,
+    eciesCipherIV=cipherIV,
+    eciesCipher=cipher,
+    eciesMac= --trace ("################### mkey: " ++ show mKey) $
       --trace ("################### cipherWithIV: " ++ show cipherWithIV) $
         hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV)
     }
@@ -181,11 +181,11 @@ encryptECEIS myPrvKey otherPubKey cipherIV msg =
     cipher = encrypt eKey cipherIV msg
     cipherWithIV = cipherIV `B.append` cipher
 
-decryptECEIS::PrivateNumber->ECEISMessage->B.ByteString
-decryptECEIS myPrvKey msg =
-  decryptCTR (initAES eKey) (eceisCipherIV msg) (eceisCipher msg)
+decryptECIES::PrivateNumber->ECIESMessage->B.ByteString
+decryptECIES myPrvKey msg =
+  decryptCTR (initAES eKey) (eciesCipherIV msg) (eciesCipher msg)
   where
-    SharedKey sharedKey = getShared theCurve myPrvKey (eceisPubKey msg)
+    SharedKey sharedKey = getShared theCurve myPrvKey (eciesPubKey msg)
     key = hash $ B.pack (ctr ++ intToBytes sharedKey ++ s1)
     eKey = B.take 16 key
 
@@ -218,15 +218,15 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
   -- putStrLn $ "pubk: " ++ show pubk
   -- putStrLn $ "theData: " ++ show theData
 
-  let eceisMsg = encryptECEIS myPriv otherPubKey cipherIV theData 
-  let eceisMsgBytes = BL.toStrict $ encode eceisMsg
+  let eciesMsg = encryptECIES myPriv otherPubKey cipherIV theData 
+  let eciesMsgBytes = BL.toStrict $ encode eciesMsg
   
-  -- putStrLn $ "eceisMsg: "
-  -- putStrLn $ show eceisMsg
+  -- putStrLn $ "eciesMsg: "
+  -- putStrLn $ show eciesMsg
 
-  -- putStrLn $ "length ciphertext: " ++ (show . B.length $ eceisCipher eceisMsg)
-  -- putStrLn $ "length of wire message: " ++ (show . B.length $ eceisMsgBytes)
+  -- putStrLn $ "length ciphertext: " ++ (show . B.length $ eciesCipher eciesMsg)
+  -- putStrLn $ "length of wire message: " ++ (show . B.length $ eciesMsgBytes)
   
-  return $ eceisMsgBytes
+  return $ eciesMsgBytes
 
 
