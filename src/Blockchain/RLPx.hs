@@ -124,40 +124,6 @@ hPubKeyToPubKey pubKey =
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ethCryptAccept::MonadIO m=>PrivateNumber->Point->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
 ethCryptAccept myPriv otherPoint = do
   hsBytes <- CB.take 307
@@ -181,31 +147,37 @@ ethCryptAccept myPriv otherPoint = do
 
 
 
-
-
-
-
-
-
-
 ethCryptAcceptEIP8::MonadIO m=>
                     PrivateNumber->Point->BL.ByteString->B.ByteString->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
-ethCryptAcceptEIP8 myPriv otherPoint hsBytes eciesMsgIBytes = do
+ethCryptAcceptEIP8 myPriv otherPoint' hsBytes eciesMsgIBytes = do
 
-  let (theRlp, _) = rlpSplit eciesMsgIBytes
+  let (RLPArray [signatureRLP, pubKeyRLP, otherNonceRLP, versionRLP], _) = rlpSplit eciesMsgIBytes
+      otherNonce = rlpDecode otherNonceRLP
+      pubKey = rlpDecode pubKeyRLP::B.ByteString
+      signatureBytes = rlpDecode signatureRLP
+      version = rlpDecode versionRLP::Integer
 
-  liftIO $ putStrLn $ "rlp: " ++ show theRlp
-                    
-  _ <- error "in ethCryptAcceptEIP8"
+                                                                           
+  --liftIO $ putStrLn $ "signature: " ++ show signatureBytes
+  --liftIO $ putStrLn $ "pubKey: " ++ show pubKey
+  --liftIO $ putStrLn $ "otherNonce: " ++ show otherNonce
+  --liftIO $ putStrLn $ "version: " ++ show version
 
-
+  let otherPoint = bytesToPoint $ B.unpack pubKey
+             
+  when (version /= 4) $ error "wrong version in packet sent to ethCryptAcceptEIP8"
+       
+  when (otherPoint /= otherPoint') $ do
+    liftIO $ putStrLn $ "---------------- otherPoint: " ++ show otherPoint
+    liftIO $ putStrLn $ "---------------- otherPoint': " ++ show otherPoint'
+    _ <- error "pubKeys don't seem to match"
+    return ()
 
   let SharedKey sharedKey = getShared theCurve myPriv otherPoint
-      otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
       msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
-      r = bytesToWord256 $ B.unpack $ B.take 32 $ eciesMsgIBytes
-      s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eciesMsgIBytes
-      v = head . B.unpack $ B.take 1 $ B.drop 64 eciesMsgIBytes
+      r = bytesToWord256 $ B.unpack $ B.take 32 $ signatureBytes
+      s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ signatureBytes
+      v = head . B.unpack $ B.take 1 $ B.drop 64 signatureBytes
       yIsOdd = v == 1
 
       extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
