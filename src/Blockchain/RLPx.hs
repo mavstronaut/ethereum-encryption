@@ -35,7 +35,6 @@ import Blockchain.Handshake
 
 
 
-
 --import Debug.Trace
 
 theCurve::Curve
@@ -143,7 +142,7 @@ ethCryptAccept myPriv otherPoint = do
      let fullBuffer = BL.drop 2 $ hsBytes `BL.append` remainingBytes
          maybeEciesMsgIBytes = ECIES.decrypt myPriv fullBuffer
          eciesMsgIBytes = either (error . (++ ": " ++ show (BL.unpack fullBuffer)) . ("Malformed packed sent from peer: " ++)) id maybeEciesMsgIBytes
-     ethCryptAcceptEIP8 myPriv otherPoint hsBytes eciesMsgIBytes
+     ethCryptAcceptEIP8 myPriv otherPoint (hsBytes `BL.append` remainingBytes) eciesMsgIBytes
 
 
 
