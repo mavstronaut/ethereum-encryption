@@ -23,6 +23,7 @@ import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.Data.RLP
 import qualified Blockchain.ECIES as ECIES
 import Blockchain.Error
 import Blockchain.EthEncryptionException
@@ -30,7 +31,6 @@ import Blockchain.ExtendedECDSA
 import Blockchain.ExtWord
 import Blockchain.Frame
 import Blockchain.Handshake
-
 
 
 
@@ -64,7 +64,7 @@ ethCryptConnect myPriv otherPubKey = do
 
   when (BL.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ fromMaybe (error "error in ethCryptConnect, invalid EXIES packet in response") $ ECIES.decrypt myPriv handshakeReplyBytes
+  let ackMsg = bytesToAckMsg $ B.unpack $ either (error . ("error in ethCryptConnect"++)) id $ ECIES.decrypt myPriv handshakeReplyBytes
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -164,8 +164,8 @@ ethCryptAccept myPriv otherPoint = do
 
   maybeResult <-
     case ECIES.decrypt myPriv hsBytes of
-     Nothing -> return Nothing
-     Just x -> ethCryptAcceptOld myPriv otherPoint hsBytes x
+     Left _ -> return Nothing
+     Right x -> ethCryptAcceptOld myPriv otherPoint hsBytes x
 
   case maybeResult of
    Just x -> return x
@@ -174,7 +174,9 @@ ethCryptAccept myPriv otherPoint = do
          fullSize = fromIntegral first*256 + fromIntegral second
          remainingSize = fullSize - 307 + 2
      remainingBytes <- CB.take remainingSize
-     let eciesMsgIBytes = BL.toStrict $ BL.drop 2 $ hsBytes `BL.append` remainingBytes
+     let fullBuffer = BL.drop 2 $ hsBytes `BL.append` remainingBytes
+         maybeEciesMsgIBytes = ECIES.decrypt myPriv fullBuffer
+         eciesMsgIBytes = either (error . (++ ": " ++ show (BL.unpack fullBuffer)) . ("Malformed packed sent from peer: " ++)) id maybeEciesMsgIBytes
      ethCryptAcceptEIP8 myPriv otherPoint hsBytes eciesMsgIBytes
 
 
@@ -189,42 +191,50 @@ ethCryptAccept myPriv otherPoint = do
 ethCryptAcceptEIP8::MonadIO m=>
                     PrivateNumber->Point->BL.ByteString->B.ByteString->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
 ethCryptAcceptEIP8 myPriv otherPoint hsBytes eciesMsgIBytes = do
-           
-    let SharedKey sharedKey = getShared theCurve myPriv otherPoint
-        otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
-        msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
-        r = bytesToWord256 $ B.unpack $ B.take 32 $ eciesMsgIBytes
-        s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eciesMsgIBytes
-        v = head . B.unpack $ B.take 1 $ B.drop 64 eciesMsgIBytes
-        yIsOdd = v == 1
 
-        extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
-        otherEphemeral = hPubKeyToPubKey $
+  let (theRlp, _) = rlpSplit eciesMsgIBytes
+
+  liftIO $ putStrLn $ "rlp: " ++ show theRlp
+                    
+  _ <- error "in ethCryptAcceptEIP8"
+
+
+
+  let SharedKey sharedKey = getShared theCurve myPriv otherPoint
+      otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
+      msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
+      r = bytesToWord256 $ B.unpack $ B.take 32 $ eciesMsgIBytes
+      s = bytesToWord256 $ B.unpack $ B.take 32 $ B.drop 32 $ eciesMsgIBytes
+      v = head . B.unpack $ B.take 1 $ B.drop 64 eciesMsgIBytes
+      yIsOdd = v == 1
+
+      extSig = ExtendedSignature (H.Signature (fromIntegral r) (fromIntegral s)) yIsOdd
+      otherEphemeral = hPubKeyToPubKey $
                             fromMaybe (error "malformed signature in tcpHandshakeServer") $
                             getPubKeyFromSignature extSig msg
 
-    entropyPool <- liftIO createEntropyPool
-    let g = cprgCreate entropyPool :: SystemRNG
-        (myPriv', _) = generatePrivate g $ getCurveByName SEC_p256k1
-        myEphemeral = calculatePublic theCurve myPriv'
-        myNonce = 25 :: Word256
-        ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
+  entropyPool <- liftIO createEntropyPool
+  let g = cprgCreate entropyPool :: SystemRNG
+      (myPriv', _) = generatePrivate g $ getCurveByName SEC_p256k1
+      myEphemeral = calculatePublic theCurve myPriv'
+      myNonce = 25 :: Word256
+      ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
         
-    eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint $ BL.toStrict $ encode $ ackMsg
+  eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint $ BL.toStrict $ encode $ ackMsg
 
-    yield $ eciesMsgOBytes
+  yield $ eciesMsgOBytes
 
-    let SharedKey ephemeralSharedSecret = getShared theCurve myPriv' otherEphemeral
-        ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
+  let SharedKey ephemeralSharedSecret = getShared theCurve myPriv' otherEphemeral
+      ephemeralSharedSecretBytes = intToBytes ephemeralSharedSecret
 
-        myNonceBS = B.pack $ word256ToBytes myNonce
-        frameDecKey = otherNonce `add`
+      myNonceBS = B.pack $ word256ToBytes myNonce
+      frameDecKey = otherNonce `add`
                         myNonceBS `add`
                         (B.pack ephemeralSharedSecretBytes) `add`
                         (B.pack ephemeralSharedSecretBytes)
-        macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
+      macEncKey = frameDecKey `add` (B.pack ephemeralSharedSecretBytes)
 
-    return (
+  return (
       EthCryptState { --encrypt
          aesState = AES.AESCTRState (initAES frameDecKey) (aesIV_ $ B.replicate 16 0) 0,
          mac=SHA3.update (SHA3.init 256) $ (macEncKey `bXor` otherNonce) `B.append` eciesMsgOBytes,

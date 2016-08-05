@@ -29,7 +29,7 @@ encrypt myPrvKey otherPubKey bytes = do
   cipherIV <- getEntropy 16
   return $ encode $ encryptECIES myPrvKey otherPubKey cipherIV bytes
 
-decrypt::PrivateNumber->BL.ByteString->Maybe B.ByteString
+decrypt::PrivateNumber->BL.ByteString->Either String B.ByteString
 decrypt prvKey bytes = do
   let eciesMsg = decode bytes
   when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
@@ -38,14 +38,10 @@ decrypt prvKey bytes = do
 
   let (expectedMac, _) = getMacAndCipher prvKey (eciesPubKey eciesMsg) (eciesCipherIV eciesMsg) msg
 
+  unless (eciesForm eciesMsg == 4) $ Left $ "first byte of buffer must be 4: " ++ show (BL.unpack bytes)
+  unless (eciesMac eciesMsg /= expectedMac) $ Left "mac doesn't match"
 
-  if (
-      (eciesForm eciesMsg /= 4)
-      ||
-      (eciesMac eciesMsg /= expectedMac)
-     )
-    then Nothing
-    else return msg
+  return msg
   
 -----------------
 
