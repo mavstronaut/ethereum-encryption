@@ -5,6 +5,7 @@ module Blockchain.ECIES (
   encrypt
   ) where
 
+import Codec.Utils
 import Control.Monad
 import Crypto.Cipher.AES
 import Crypto.Hash.SHA256
@@ -33,7 +34,13 @@ decrypt prvKey bytes = do
   let eciesMsg = decode bytes
   when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
 
-  if (eciesForm eciesMsg /= 4)
+
+
+  if (
+      (eciesForm eciesMsg /= 4)
+--      ||
+--      (eciesMac /= hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack $ cipherIV eciesMsg `B.append` cipher eciesMsg))
+     )
     then Nothing
     else return $ decryptECIES prvKey eciesMsg
   
@@ -98,6 +105,21 @@ errorHead msg _ = error msg
 encrypt'::B.ByteString->B.ByteString->B.ByteString->B.ByteString
 encrypt' key cipherIV input = encryptCTR (initAES key) cipherIV input 
 
+getMacAndCipher::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->([Octet], B.ByteString)
+getMacAndCipher myPrvKey otherPubKey cipherIV msg =
+  (
+    hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV),
+    cipher
+  )
+  where
+    cipherWithIV = cipherIV `B.append` cipher
+    SharedKey sharedKey = getShared theCurve myPrvKey otherPubKey
+    key = hash $ B.pack (ctr ++ intToBytes sharedKey ++ s1)
+    mKeyMaterial = B.take 16 $ B.drop 16 key
+    mKey = hash mKeyMaterial
+    eKey = B.take 16 key
+    cipher = encrypt' eKey cipherIV msg
+
 encryptECIES::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->ECIESMessage
 encryptECIES myPrvKey otherPubKey cipherIV msg =
   ECIESMessage {
@@ -105,20 +127,11 @@ encryptECIES myPrvKey otherPubKey cipherIV msg =
     eciesPubKey=calculatePublic theCurve myPrvKey,
     eciesCipherIV=cipherIV,
     eciesCipher=cipher,
-    eciesMac= --trace ("################### mkey: " ++ show mKey) $
-      --trace ("################### cipherWithIV: " ++ show cipherWithIV) $
-        hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV)
+    eciesMac=mac
     }
   where
-    SharedKey sharedKey = --trace ("##################### sharedKey: " ++ show (getShared theCurve myPrvKey otherPubKey)) $
-                          getShared theCurve myPrvKey otherPubKey
-    key = hash $ B.pack (ctr ++ intToBytes sharedKey ++ s1)
-    eKey = B.take 16 key
-    mKeyMaterial = -- trace ("##################### sharedKey: " ++ show (B.take 16 $ B.drop 16 key)) $
-                   (B.take 16 $ B.drop 16 key)
-    mKey = hash mKeyMaterial
-    cipher = encrypt' eKey cipherIV msg
-    cipherWithIV = cipherIV `B.append` cipher
+    (mac, cipher) = getMacAndCipher myPrvKey otherPubKey cipherIV msg
+
 
 decryptECIES::PrivateNumber->ECIESMessage->B.ByteString
 decryptECIES myPrvKey msg =
