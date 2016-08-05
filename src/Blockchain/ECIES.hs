@@ -2,8 +2,7 @@
 
 module Blockchain.ECIES (
   decrypt,
-  encrypt,
-  ECIESMessage(..)
+  encrypt
   ) where
 
 import Control.Monad
