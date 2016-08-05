@@ -149,14 +149,13 @@ ethCryptAccept myPriv otherPoint = do
 
 ethCryptAcceptEIP8::MonadIO m=>
                     PrivateNumber->Point->BL.ByteString->B.ByteString->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
-ethCryptAcceptEIP8 myPriv otherPoint' hsBytes eciesMsgIBytes = do
+ethCryptAcceptEIP8 myPriv _ hsBytes eciesMsgIBytes = do
 
   let (RLPArray [signatureRLP, pubKeyRLP, otherNonceRLP, versionRLP], _) = rlpSplit eciesMsgIBytes
       otherNonce = rlpDecode otherNonceRLP
       pubKey = rlpDecode pubKeyRLP::B.ByteString
       signatureBytes = rlpDecode signatureRLP
       version = rlpDecode versionRLP::Integer
-
                                                                            
   --liftIO $ putStrLn $ "signature: " ++ show signatureBytes
   --liftIO $ putStrLn $ "pubKey: " ++ show pubKey
@@ -167,12 +166,6 @@ ethCryptAcceptEIP8 myPriv otherPoint' hsBytes eciesMsgIBytes = do
              
   when (version /= 4) $ error "wrong version in packet sent to ethCryptAcceptEIP8"
        
-  when (otherPoint /= otherPoint') $ do
-    liftIO $ putStrLn $ "---------------- otherPoint: " ++ show otherPoint
-    liftIO $ putStrLn $ "---------------- otherPoint': " ++ show otherPoint'
-    _ <- error "pubKeys don't seem to match"
-    return ()
-
   let SharedKey sharedKey = getShared theCurve myPriv otherPoint
       msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
       r = bytesToWord256 $ B.unpack $ B.take 32 $ signatureBytes
@@ -227,7 +220,7 @@ ethCryptAcceptEIP8 myPriv otherPoint' hsBytes eciesMsgIBytes = do
 
 ethCryptAcceptOld::MonadIO m=>PrivateNumber->Point->BL.ByteString->B.ByteString->ConduitM B.ByteString B.ByteString m (Maybe (EthCryptState, EthCryptState))
 ethCryptAcceptOld myPriv otherPoint hsBytes eciesMsgIBytes = do
-           
+
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
         otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
         msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
