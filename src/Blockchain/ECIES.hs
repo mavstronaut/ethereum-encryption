@@ -6,6 +6,7 @@ module Blockchain.ECIES (
   ECIESMessage(..)
   ) where
 
+import Control.Monad
 import Crypto.Cipher.AES
 import Crypto.Hash.SHA256
 import Crypto.PubKey.ECC.DH
@@ -26,12 +27,15 @@ encrypt myPrvKey otherPubKey iv bytes =
   encode $ encryptECIES myPrvKey otherPubKey iv bytes
 
 decrypt::PrivateNumber->BL.ByteString->Maybe B.ByteString
-decrypt prvKey bytes =
-  if eciesCipherIV eciesMsg == B.replicate 16 0
-  then Just $ decryptECIES prvKey eciesMsg
-  else Nothing
-  where
-    eciesMsg = decode bytes
+decrypt prvKey bytes = do
+  let eciesMsg = decode bytes
+  when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
+
+  when (eciesCipherIV eciesMsg /= B.replicate 16 0) $ error "peer didn't set CipherIV to all zeros"
+   
+  if (eciesForm eciesMsg /= 4)
+    then Nothing
+    else return $ decryptECIES prvKey eciesMsg
   
 -----------------
 

@@ -126,23 +126,12 @@ hPubKeyToPubKey pubKey =
 
 ethCryptAccept::MonadIO m=>PrivateNumber->Point->ConduitM B.ByteString B.ByteString m (EthCryptState, EthCryptState)
 ethCryptAccept myPriv otherPoint = do
---tcpHandshakeServer :: PrivateNumber-> Point-> ConduitM B.ByteString B.ByteString IO EthCryptStateLite
---tcpHandshakeServer prv otherPoint = go
     hsBytes <- CB.take 307
 
-    let eciesMsgIncoming = decode $ hsBytes::ECIES.ECIESMessage
-
-    when (ECIES.eciesForm eciesMsgIncoming `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
-    
-    when (not $ ECIES.eciesForm eciesMsgIncoming `elem` [2,3,4]) $ error "peer seems to be using EIP 8"
-    
-    liftIO $ putStrLn $ "++++++++++++++++++ " ++ show (ECIES.eciesForm eciesMsgIncoming)
-        
     let eciesMsgIBytes =
           case ECIES.decrypt myPriv hsBytes of
            Nothing -> error "peer seems to be using EIP 8"
            Just x -> x
-
            
         iv = B.replicate 16 0
 
