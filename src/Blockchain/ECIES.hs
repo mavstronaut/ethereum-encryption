@@ -34,15 +34,18 @@ decrypt prvKey bytes = do
   let eciesMsg = decode bytes
   when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
 
+  let msg = decryptECIES prvKey eciesMsg
+
+  let (expectedMac, _) = getMacAndCipher prvKey (eciesPubKey eciesMsg) (eciesCipherIV eciesMsg) msg
 
 
   if (
       (eciesForm eciesMsg /= 4)
---      ||
---      (eciesMac /= hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack $ cipherIV eciesMsg `B.append` cipher eciesMsg))
+      ||
+      (eciesMac eciesMsg /= expectedMac)
      )
     then Nothing
-    else return $ decryptECIES prvKey eciesMsg
+    else return msg
   
 -----------------
 
