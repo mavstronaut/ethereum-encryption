@@ -15,23 +15,24 @@ import Data.Binary.Get
 import Data.Binary.Put
 import Data.Bits
 import qualified Data.ByteString as B
+--import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Lazy as BL
 import Data.HMAC
+import System.Entropy
 
 import Blockchain.ExtWord
 -- import Debug.Trace
 
-encrypt::PrivateNumber->Point->B.ByteString->B.ByteString->BL.ByteString
-encrypt myPrvKey otherPubKey iv bytes =
-  encode $ encryptECIES myPrvKey otherPubKey iv bytes
+encrypt::PrivateNumber->Point->B.ByteString->IO BL.ByteString
+encrypt myPrvKey otherPubKey bytes = do
+  cipherIV <- getEntropy 16
+  return $ encode $ encryptECIES myPrvKey otherPubKey cipherIV bytes
 
 decrypt::PrivateNumber->BL.ByteString->Maybe B.ByteString
 decrypt prvKey bytes = do
   let eciesMsg = decode bytes
   when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
 
-  when (eciesCipherIV eciesMsg /= B.replicate 16 0) $ error "peer didn't set CipherIV to all zeros"
-   
   if (eciesForm eciesMsg /= 4)
     then Nothing
     else return $ decryptECIES prvKey eciesMsg

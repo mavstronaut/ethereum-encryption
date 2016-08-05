@@ -133,8 +133,6 @@ ethCryptAccept myPriv otherPoint = do
            Nothing -> error "peer seems to be using EIP 8"
            Just x -> x
            
-        iv = B.replicate 16 0
-
     let SharedKey sharedKey = getShared theCurve myPriv otherPoint
         otherNonce = B.take 32 $ B.drop 161 $ eciesMsgIBytes
         msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack otherNonce)
@@ -155,7 +153,8 @@ ethCryptAccept myPriv otherPoint = do
         myEphemeral = calculatePublic theCurve myPriv'
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
-        eciesMsgOBytes = BL.toStrict $ ECIES.encrypt myPriv' otherPoint iv ( BL.toStrict $ encode $ ackMsg )
+        
+    eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint $ BL.toStrict $ encode $ ackMsg
 
     yield $ eciesMsgOBytes
 

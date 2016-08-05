@@ -114,7 +114,6 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
     myPublic = calculatePublic theCurve myPriv
     SharedKey sharedKey = getShared theCurve myPriv otherPubKey
    
-    cipherIV = B.replicate 16 0 --TODO- Important!  Is this really supposed to be zero?
     msg = fromIntegral sharedKey `xor` (bytesToWord256 $ B.unpack myNonce)
 
 
@@ -137,7 +136,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
   -- putStrLn $ "pubk: " ++ show pubk
   -- putStrLn $ "theData: " ++ show theData
 
-  let eciesMsgBytes = BL.toStrict $ ECIES.encrypt myPriv otherPubKey cipherIV theData 
+  eciesMsgBytes <- fmap BL.toStrict $ ECIES.encrypt myPriv otherPubKey theData 
   
   -- putStrLn $ "eciesMsg: "
   -- putStrLn $ show eciesMsg
