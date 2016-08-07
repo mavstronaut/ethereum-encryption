@@ -63,7 +63,7 @@ ethCryptConnect myPriv otherPubKey = do
 
   when (BL.length handshakeReplyBytes /= 210) $ liftIO $ throwIO $ HandshakeException "handshake reply didn't contain enough bytes"
   
-  let ackMsg = bytesToAckMsg $ B.unpack $ either (error . ("error in ethCryptConnect"++)) id $ ECIES.decrypt myPriv handshakeReplyBytes
+  let ackMsg = bytesToAckMsg $ B.unpack $ either (error . ("error in ethCryptConnect"++)) id $ ECIES.decrypt myPriv handshakeReplyBytes B.empty
 
 --  liftIO $ putStrLn $ "ackMsg: " ++ show ackMsg
 ------------------------------
@@ -128,7 +128,7 @@ ethCryptAccept myPriv otherPoint = do
   hsBytes <- CB.take 307
 
   maybeResult <-
-    case ECIES.decrypt myPriv hsBytes of
+    case ECIES.decrypt myPriv hsBytes B.empty of
      Left _ -> return Nothing
      Right x -> ethCryptAcceptOld myPriv otherPoint hsBytes x
 
@@ -140,7 +140,7 @@ ethCryptAccept myPriv otherPoint = do
          remainingSize = fullSize - 307 + 2
      remainingBytes <- CB.take remainingSize
      let fullBuffer = BL.drop 2 $ hsBytes `BL.append` remainingBytes
-         maybeEciesMsgIBytes = ECIES.decrypt myPriv fullBuffer
+         maybeEciesMsgIBytes = ECIES.decrypt myPriv fullBuffer $ BL.toStrict $ BL.take 2 $ hsBytes `BL.append` remainingBytes
          eciesMsgIBytes = either (error . (++ ": " ++ show (BL.unpack fullBuffer)) . ("Malformed packed sent from peer: " ++)) id maybeEciesMsgIBytes
      ethCryptAcceptEIP8 myPriv otherPoint (hsBytes `BL.append` remainingBytes) eciesMsgIBytes
 
@@ -184,7 +184,7 @@ ethCryptAcceptEIP8 myPriv _ hsBytes eciesMsgIBytes = do
       myNonce = 25 :: Word256
       ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
         
-  eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint $ BL.toStrict $ encode $ ackMsg
+  eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint (BL.toStrict $ encode $ ackMsg) B.empty
 
   yield $ eciesMsgOBytes
 
@@ -240,7 +240,7 @@ ethCryptAcceptOld myPriv otherPoint hsBytes eciesMsgIBytes = do
         myNonce = 25 :: Word256
         ackMsg = AckMessage { ackEphemeralPubKey=myEphemeral, ackNonce=myNonce, ackKnownPeer=False }
         
-    eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint $ BL.toStrict $ encode $ ackMsg
+    eciesMsgOBytes <- liftIO $ fmap BL.toStrict $ ECIES.encrypt myPriv' otherPoint (BL.toStrict $ encode $ ackMsg) B.empty
 
     yield $ eciesMsgOBytes
 

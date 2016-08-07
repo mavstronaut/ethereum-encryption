@@ -22,24 +22,31 @@ import Data.HMAC
 import System.Entropy
 
 import Blockchain.ExtWord
--- import Debug.Trace
 
-encrypt::PrivateNumber->Point->B.ByteString->IO BL.ByteString
-encrypt myPrvKey otherPubKey bytes = do
+--import Debug.Trace
+
+encrypt::PrivateNumber->Point->B.ByteString->B.ByteString->IO BL.ByteString
+encrypt myPrvKey otherPubKey bytes prefix = do
   cipherIV <- getEntropy 16
-  return $ encode $ encryptECIES myPrvKey otherPubKey cipherIV bytes
+  return $ encode $ encryptECIES myPrvKey otherPubKey cipherIV bytes prefix
 
-decrypt::PrivateNumber->BL.ByteString->Either String B.ByteString
-decrypt prvKey bytes = do
+decrypt::PrivateNumber->BL.ByteString->B.ByteString->Either String B.ByteString
+decrypt prvKey bytes prefix = do
   let eciesMsg = decode bytes
+
+  --Special case of the next check, indicates that a different key encoding was used
   when (eciesForm eciesMsg `elem` [2,3]) $ error "peer connected with unsupported handshake packet"
+  
+  unless (eciesForm eciesMsg == 4) $ 
+       Left $ "first byte of buffer must be 4: " ++ show (BL.unpack bytes)
 
   let msg = decryptECIES prvKey eciesMsg
 
-  let (expectedMac, _) = getMacAndCipher prvKey (eciesPubKey eciesMsg) (eciesCipherIV eciesMsg) msg
+  let (expectedMac, _) = getMacAndCipher prvKey (eciesPubKey eciesMsg) (eciesCipherIV eciesMsg) msg prefix
 
-  unless (eciesForm eciesMsg == 4) $ Left $ "first byte of buffer must be 4: " ++ show (BL.unpack bytes)
-  unless (eciesMac eciesMsg /= expectedMac) $ Left "mac doesn't match"
+  unless (eciesMac eciesMsg == expectedMac) $ 
+       Left $ "mac doesn't match: expected " ++ show expectedMac 
+              ++ ", got " ++ show (eciesMac eciesMsg)
 
   return msg
   
@@ -104,10 +111,10 @@ errorHead msg _ = error msg
 encrypt'::B.ByteString->B.ByteString->B.ByteString->B.ByteString
 encrypt' key cipherIV input = encryptCTR (initAES key) cipherIV input 
 
-getMacAndCipher::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->([Octet], B.ByteString)
-getMacAndCipher myPrvKey otherPubKey cipherIV msg =
+getMacAndCipher::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->B.ByteString->([Octet], B.ByteString)
+getMacAndCipher myPrvKey otherPubKey cipherIV msg prefix =
   (
-    hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV),
+    hmac (HashMethod (B.unpack . hash . B.pack) 512) (B.unpack mKey) (B.unpack cipherWithIV ++ B.unpack prefix),
     cipher
   )
   where
@@ -119,8 +126,8 @@ getMacAndCipher myPrvKey otherPubKey cipherIV msg =
     eKey = B.take 16 key
     cipher = encrypt' eKey cipherIV msg
 
-encryptECIES::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->ECIESMessage
-encryptECIES myPrvKey otherPubKey cipherIV msg =
+encryptECIES::PrivateNumber->PublicPoint->B.ByteString->B.ByteString->B.ByteString->ECIESMessage
+encryptECIES myPrvKey otherPubKey cipherIV msg prefix =
   ECIESMessage {
     eciesForm = 4, --form=4 indicates pubkey is not compressed
     eciesPubKey=calculatePublic theCurve myPrvKey,
@@ -129,7 +136,7 @@ encryptECIES myPrvKey otherPubKey cipherIV msg =
     eciesMac=mac
     }
   where
-    (mac, cipher) = getMacAndCipher myPrvKey otherPubKey cipherIV msg
+    (mac, cipher) = getMacAndCipher myPrvKey otherPubKey cipherIV msg prefix
 
 
 decryptECIES::PrivateNumber->ECIESMessage->B.ByteString

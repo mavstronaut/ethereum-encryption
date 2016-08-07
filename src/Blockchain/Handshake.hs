@@ -136,7 +136,7 @@ getHandshakeBytes myPriv otherPubKey myNonce = do
   -- putStrLn $ "pubk: " ++ show pubk
   -- putStrLn $ "theData: " ++ show theData
 
-  eciesMsgBytes <- fmap BL.toStrict $ ECIES.encrypt myPriv otherPubKey theData 
+  eciesMsgBytes <- fmap BL.toStrict $ ECIES.encrypt myPriv otherPubKey theData B.empty
   
   -- putStrLn $ "eciesMsg: "
   -- putStrLn $ show eciesMsg
