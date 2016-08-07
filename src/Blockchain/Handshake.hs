@@ -3,9 +3,7 @@
 module Blockchain.Handshake (
   AckMessage(..),
   getHandshakeBytes,
-  bytesToAckMsg,
-  bytesToPoint,
-  pointToBytes
+  bytesToAckMsg
   ) where
 
 import qualified Crypto.Hash.SHA3 as SHA3
@@ -20,6 +18,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
+import Blockchain.Data.PubKey
 import Blockchain.ExtendedECDSA
 import Blockchain.ExtWord
 import qualified Blockchain.ECIES as ECIES
@@ -29,29 +28,6 @@ import qualified Blockchain.ECIES as ECIES
 
 theCurve::Curve
 theCurve = getCurveByName SEC_p256k1
-
-intToBytes::Integer->[Word8]
-intToBytes x = map (fromIntegral . (x `shiftR`)) [256-8, 256-16..0]
-
-pointToBytes::Point->[Word8]
-pointToBytes (Point x y) = intToBytes x ++ intToBytes y
-pointToBytes PointO = error "pointToBytes got value PointO, I don't know what to do here"
-
-hPointToBytes::H.Point->[Word8]
-hPointToBytes point =
-  word256ToBytes (fromIntegral x) ++ word256ToBytes (fromIntegral y)
-  where
-    x = fromMaybe (error "getX failed in prvKey2Address") $ H.getX point
-    y = fromMaybe (error "getY failed in prvKey2Address") $ H.getY point
-
-pubKeyToBytes::H.PubKey->[Word8]
-pubKeyToBytes pubKey = hPointToBytes $ H.pubKeyPoint pubKey
-
-bytesToPoint::[Word8]->Point
-bytesToPoint x | length x == 64 =
-  Point (toInteger $ bytesToWord256 $ take 32 x) (toInteger $ bytesToWord256 $ drop 32 x)
-bytesToPoint _ = error "bytesToPoint called with the wrong number of bytes"
-
 
 sigToBytes::ExtendedSignature->[Word8]
 sigToBytes (ExtendedSignature signature yIsOdd) =

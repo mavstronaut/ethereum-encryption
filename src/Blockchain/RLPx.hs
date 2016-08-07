@@ -23,6 +23,7 @@ import Data.Maybe
 import qualified Network.Haskoin.Internals as H
 
 import qualified Blockchain.AESCTR as AES
+import Blockchain.Data.PubKey
 import Blockchain.Data.RLP
 import qualified Blockchain.ECIES as ECIES
 import Blockchain.Error
